@@ -1,166 +1,141 @@
 # Technical Design Document (TDD)
-
 ## CampusConnect: University Service Request Management System
 
-**Version:** 1.0\
-**Status:** Course project draft
+**Version:** 1.1 | **Status:** Proposed implementation design
 
 ## 1. Architecture
+CampusConnect uses a frontend/backend architecture. React + TypeScript presents forms and request lists. FastAPI exposes JSON REST endpoints, validates input, and applies application rules. A database stores requests and, in Beta, user and role information.
 
-CampusConnect uses a client-server architecture: - **Frontend:** React +
-TypeScript + Vite. - **Backend:** FastAPI + Python. - **API style:**
-REST with JSON. - **Persistence:** relational database. - **API
-exploration:** FastAPI Swagger UI at `/docs` during local development.
+## 2. Tech stack
+| Layer | Technology | Purpose |
+|---|---|---|
+| Frontend | React | Reusable UI components |
+| Frontend language | TypeScript | Static types for frontend code |
+| Frontend tooling | Vite | Development server and build tooling |
+| Backend language | Python 3.11+ | Backend logic |
+| Backend framework | FastAPI | REST endpoints and input validation |
+| ASGI server | Uvicorn | Runs FastAPI |
+| Database | SQLite for local MVP; production choice TBD | Persistent request storage |
+| API documentation | OpenAPI / Swagger UI via FastAPI | Inspect and test endpoints |
+| Version control | Git and GitHub | History, issues, branches, pull requests |
+| Testing | pytest and FastAPI TestClient (planned) | Automated backend tests |
+| Deployment | Vercel may host frontend; backend host TBD | Publish after local MVP works |
 
-## 2. High-Level Request Flow
+The repository has a Vite-based React/TypeScript frontend and FastAPI backend. Database integration, tests, and deployment must be verified separately before being described as complete.
 
-1.  User interacts with a React page.
-2.  Frontend validates basic form input.
-3.  Frontend sends an HTTP request to the FastAPI endpoint.
-4.  FastAPI validates input using request schemas.
-5.  Application logic checks business rules and accesses the database.
-6.  Backend returns a JSON response and HTTP status code.
-7.  Frontend displays the result or a useful error message.
+## 3. Project structure
+Proposed structure as features are implemented:
 
-## 3. Proposed Backend Structure
+```text
+campusconnect/
+├── docs/
+│   ├── PRD.md
+│   ├── SRS.md
+│   └── TDD.md
+├── frontend/
+│   ├── src/
+│   │   ├── components/
+│   │   ├── pages/
+│   │   ├── services/
+│   │   ├── types/
+│   │   ├── App.tsx
+│   │   └── main.tsx
+│   ├── package.json
+│   └── vite.config.ts
+├── backend/
+│   ├── app/
+│   │   ├── routers/
+│   │   ├── schemas/
+│   │   ├── models/
+│   │   ├── services/
+│   │   └── database.py
+│   ├── main.py
+│   ├── requirements.txt
+│   └── tests/
+├── .gitignore
+└── README.md
+```
 
-The exact files may evolve as implementation grows.
+This is a proposed future structure; some folders may not exist yet. Create them as needed. Never commit `backend/venv/`, `node_modules/`, build output, local databases, or secrets.
 
--   `main.py`: create the FastAPI app and register routers.
--   `routers/`: API endpoints grouped by resource.
--   `schemas/`: Pydantic request/response models.
--   `models/`: database models.
--   `services/`: business rules and workflow logic.
--   `database/`: database connection and session configuration.
--   `tests/`: API and business-logic tests.
-
-For the first increment, keep the structure simple and avoid creating
-empty layers that are not yet needed.
-
-## 4. Proposed Frontend Structure
-
--   `src/`: application source.
--   `components/`: reusable UI elements.
--   `pages/`: service list, request list, request form, request detail.
--   `api/`: functions for calling backend endpoints.
--   `types/`: shared TypeScript types.
--   `App.tsx`: application shell and routing entry point, depending on
-    the template.
-
-## 5. Proposed Data Model
-
-### User
-
--   `id` (primary key)
--   `name`
--   `email` (unique)
--   `role` (Student, Staff, Administrator; Beta authorization)
-
-### Service
-
--   `id` (primary key)
--   `name`
--   `description`
--   `is_active`
-
+## 4. Data design
 ### ServiceRequest
+- `id`: unique integer or UUID.
+- `title`: required short text.
+- `description`: required text.
+- `category`: required category name or ID.
+- `status`: initially `Submitted`.
+- `created_at`: creation timestamp.
+- `updated_at`: timestamp updated when relevant fields change.
 
--   `id` (primary key)
--   `student_id` (foreign key to User)
--   `service_id` (foreign key to Service)
--   `title`
--   `description`
--   `status` (e.g. Submitted, In Progress, Completed, Rejected,
-    Cancelled)
--   `assigned_staff_id` (nullable foreign key to User)
--   `staff_remark` (optional)
--   `created_at`
--   `updated_at`
+### User (Beta)
+- `id`: unique identifier.
+- `name`: display name.
+- `email`: unique login identifier.
+- `password_hash`: password hash only, never plaintext.
+- `role`: `student`, `staff`, or `admin`.
 
-## 6. Proposed REST API
+In Beta, a request should reference its submitting user and optionally an assigned staff user. Students should access only their own requests; staff should only perform permitted actions.
 
-These are planned endpoints, not a claim that they have already been
-implemented.
+## 5. Planned API design
+| Method | Endpoint | Description |
+|---|---|---|
+| GET | `/api/health` | Existing basic health check |
+| GET | `/api/hello` | Existing sample endpoint |
+| POST | `/api/requests` | Create a request |
+| GET | `/api/requests` | List requests |
+| GET | `/api/requests/{request_id}` | Retrieve one request |
+| PATCH | `/api/requests/{request_id}/status` | Update status |
 
-  --------------------------------------------------------------------------------------------
-  Method            Path                                  Purpose            Priority
-  ----------------- ------------------------------------- ------------------ -----------------
-  GET               `/api/health`                         Health check       Existing template
+Request endpoints are planned until implemented. Suggested statuses are `Submitted`, `In Progress`, and `Resolved`. Use appropriate HTTP status codes such as 201 for creation and 404 for missing records.
 
-  GET               `/api/hello`                          Template/example   Existing template
-                                                          endpoint           
+## 6. Configuration
+- Keep environment-specific settings outside source code.
+- Use environment variables for API URLs, database locations, and secret keys.
+- Provide `.env.example` with placeholders only; never commit real credentials.
+- Add `.env`, Python virtual environments, `node_modules/`, build output, and local database files to `.gitignore`.
+- Configure CORS to allow the local frontend origin during development and restrict origins in production.
+- Use a strong secret from the hosting environment when authentication is implemented.
 
-  GET               `/api/services`                       List active        MVP
-                                                          services           
+Example placeholder settings:
+```env
+DATABASE_URL=sqlite:///./campusconnect.db
+FRONTEND_ORIGIN=http://localhost:5173
+SECRET_KEY=replace-with-a-long-random-secret-before-use
+```
 
-  POST              `/api/requests`                       Create a request   MVP
+## 7. Deployment / configuration
+### Local development
+1. Install Node.js and Python.
+2. In `frontend/`, run `npm install`, then `npm run dev`.
+3. In `backend/`, create and activate a Python virtual environment and install `requirements.txt`.
+4. Start FastAPI using the configured development command.
+5. Open the frontend in a browser and use the backend Swagger UI to inspect API behavior.
 
-  GET               `/api/requests`                       List requests      MVP
-                                                          allowed for        
-                                                          current            
-                                                          user/context       
+### Deployment plan
+- **Frontend:** Vercel is an optional target. Configure the API base URL to point to the deployed backend.
+- **Backend:** select a Python-compatible hosting provider; configure start command, environment variables, CORS, and database connection.
+- **Database:** use persistent storage; do not rely on an ephemeral filesystem for production data.
+- **Secrets:** configure them in the hosting provider, never in committed files.
+- **Verification:** test health checks, request create/list/update flows, and browser-to-API connectivity after deployment.
 
-  GET               `/api/requests/{request_id}`          Get request        MVP
-                                                          details            
+Documenting deployment does not mean deployment is complete. Verify the live environment before claiming it is running.
 
-  PATCH             `/api/requests/{request_id}`          Update eligible    MVP
-                                                          request fields     
+## 8. Security considerations
+- Validate client input on the backend.
+- Never store plaintext passwords.
+- Enforce authentication and role authorization before enabling protected Beta operations.
+- Avoid exposing sensitive data in responses or logs.
+- Use HTTPS in production.
+- Never commit `.env` files, credentials, or virtual environments.
 
-  DELETE            `/api/requests/{request_id}`          Cancel/delete an   MVP
-                                                          eligible request   
+## 9. Testing strategy
+- Unit tests for validation and application logic.
+- API tests for request create/list/detail/status operations.
+- Negative tests for missing fields, invalid status, and unknown IDs.
+- Frontend tests for form validation and loading/error states.
+- Integration tests for frontend/backend communication.
+- Beta security tests for role-based access.
 
-  PATCH             `/api/requests/{request_id}/status`   Staff updates      MVP
-                                                          status/remark      
-
-  POST              `/api/auth/register`                  Register a user    Beta
-
-  POST              `/api/auth/login`                     Authenticate a     Beta
-                                                          user               
-
-  GET               `/api/admin/users`                    Administrator user Beta
-                                                          management         
-
-  POST              `/api/admin/services`                 Create/manage      Beta
-                                                          services           
-  --------------------------------------------------------------------------------------------
-
-## 7. Authorization Design
-
--   **MVP:** implement core CRUD and ownership rules suitable for local
-    development; do not represent the application as production-secure
-    without authentication.
--   **Beta:** authenticate users, derive identity from the authenticated
-    session/token, and enforce roles and permissions on the backend.
--   Proposed permissions include `services:read`, `services:manage`,
-    `requests:create`, `requests:read`, `requests:update`,
-    `requests:cancel`, `requests:manage`, and `users:manage`.
--   The frontend may hide unavailable actions for usability, but backend
-    authorization remains the source of truth.
-
-## 8. Error Handling and Validation
-
--   Use Pydantic schemas to validate API payloads.
--   Return suitable HTTP status codes for success, invalid input,
-    missing resources, and denied access.
--   Avoid exposing secrets or stack traces to end users.
--   Keep configuration and secrets out of source control.
-
-## 9. Testing Strategy
-
--   Test health endpoint and each implemented API route.
--   Test valid and invalid request payloads.
--   Test request ownership and status-transition rules.
--   For Beta, test allowed and denied access for each role and
-    permission.
--   Perform a manual end-to-end check from the React UI to the FastAPI
-    API.
-
-## 10. Development and Delivery
-
--   Run frontend and backend locally during development.
--   Use feature branches for work.
--   Make focused commits with descriptive messages.
--   Open a Pull Request for review and link it to the related Issue.
--   MVP focuses on local core REST/CRUD functionality; Beta adds
-    authentication, RBAC, permission scopes, profiles/dashboard,
-    security hardening, and deployment.
+## 10. Technical risks
+Database and hosting choices may change. Authentication must be designed before real student data is used. CORS and API URLs differ between local and deployed environments. Adjust the proposed structure to match implemented code.

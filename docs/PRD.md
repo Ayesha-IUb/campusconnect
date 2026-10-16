@@ -1,100 +1,86 @@
 # Product Requirements Document (PRD)
-
 ## CampusConnect: University Service Request Management System
 
-**Version:** 1.0\
-**Status:** Course project draft\
-**Technology:** React + TypeScript frontend; FastAPI + Python backend
+**Version:** 1.1 | **Status:** MVP planning document
 
-## 1. Product Overview
+## 1. Product overview
+CampusConnect is a web application for submitting, tracking, and managing university service requests. Students can report campus problems; staff can review requests and update their status.
 
-CampusConnect is a web application for managing university service
-requests. Students can submit and track requests for university
-services. Staff can review requests assigned to them and update their
-progress. Administrators can manage users, services, assignments, and
-permissions.
+## 2. Problem statement
+Requests about classroom equipment, Wi-Fi, facilities, and other services may be scattered across messages, calls, or paper forms. This makes tracking progress difficult for students and organizing work difficult for staff. CampusConnect provides one organized workflow.
 
-## 2. Problem Statement
+## 3. Goals and success criteria
+- Students can submit a request with a title, description, and category.
+- Students can view submitted requests and their statuses.
+- Staff can review requests and update status.
+- Request information is stored centrally.
+- The design supports later authentication and role-based access control.
 
-University service requests may be handled through scattered messages or
-informal processes, making it difficult for students to track progress
-and for staff to maintain a consistent record. CampusConnect provides
-one place to submit, manage, and track requests.
+MVP success means a valid request can be created, saved, retrieved, displayed, and updated, while invalid input returns a clear error.
 
-## 3. Goals
+## 4. Target users
+### Students
+Students who need to report a campus service issue and track whether it has been received, is being handled, or has been resolved.
 
--   Provide a central service-request workflow.
--   Let students create and track their own requests.
--   Let staff process assigned requests and record status updates.
--   Give administrators tools to manage services and user access.
--   Use a REST API between the frontend and backend.
+### Service staff
+University employees, such as IT support or facilities staff, who review requests and update progress.
 
-## 4. Users and Roles
+### Administrators
+Authorized personnel who will manage users, service categories, and permissions in a later release.
 
--   **Student:** browses available services and manages their own
-    requests.
--   **Staff:** handles assigned requests and updates progress.
--   **Administrator:** manages users, services, assignments, and access
-    permissions.
+## 5. User stories
+- As a student, I want to submit a service request so the relevant team can address a problem.
+- As a student, I want to view request status so I know whether action has been taken.
+- As a staff member, I want to review requests and update their status so students can see progress.
+- As an administrator, I want to manage categories and access so the system remains organized.
 
-## 5. Scope and Priorities
+## 6. Scope
+### MVP
+- Create, list, and retrieve service requests.
+- Update request status.
+- Validate required fields.
+- React + TypeScript frontend and FastAPI backend.
+- Persistent storage suitable for local development.
 
-### MVP (midterm)
+### Later / Beta
+- Authentication and role-based permissions.
+- Separate student, staff, and administrator views.
+- Request assignment, filtering, and search.
+- Audit logging, security improvements, and deployment.
 
--   View the available service list.
--   Create a service request.
--   View the current user's requests and request details.
--   Update or cancel an eligible request.
--   Staff can view requests and update their status.
--   Persist request and service data in a relational database.
--   Expose core operations through REST API endpoints.
--   Use a React + TypeScript frontend and FastAPI + Python backend.
+### Out of scope for MVP
+- Native mobile apps.
+- University single sign-on.
+- Email/SMS notifications.
+- Complex service-level analytics.
 
-### Beta (final)
+## 7. Milestones
+| Milestone | Planned work | Completion evidence |
+|---|---|---|
+| M1: Foundation | Repository, frontend/backend setup, PRD/SRS/TDD, Git workflow | App runs locally and docs are reviewed |
+| M2: MVP API | Request model and create/list/detail/status endpoints | API tests pass |
+| M3: MVP frontend | Request form and request list/status view | Frontend calls API and displays saved data |
+| M4: Integration | Validation, error handling, tests | Core flows pass documented tests |
+| M5: Beta | Authentication, roles, staff/admin views | Role permissions are tested |
+| M6: Deployment | Environment setup and hosting | Deployed app and configuration documented |
 
--   User authentication.
--   Role-based access control (RBAC) for Student, Staff, and
-    Administrator.
--   Permission/scope enforcement on protected endpoints.
--   User profile and role-specific dashboard.
--   Administrator tools for managing users, services, and staff
-    assignments.
--   Input validation, secure error handling, and deployment.
--   Optional reporting and feedback features if time permits.
+These milestones are plans, not claims that all features are already implemented.
 
-## 6. Core User Stories
+## 8. Functional requirements
+- FR-1: Accept a request title, description, and category.
+- FR-2: Reject requests with missing required fields.
+- FR-3: Assign a unique ID to each saved request.
+- FR-4: Set new requests to `Submitted`.
+- FR-5: Allow requests to be listed and retrieved.
+- FR-6: Allow authorized staff to update status in Beta.
+- FR-7: Enforce role-based access in Beta.
 
--   As a Student, I want to submit a service request so the university
-    can address my issue.
--   As a Student, I want to see the status of my own requests so I know
-    what is happening.
--   As a Staff member, I want to view and update assigned requests so I
-    can process them.
--   As an Administrator, I want to manage services and assign staff so
-    requests reach the appropriate team.
+## 9. Non-functional requirements
+- Usability: forms and status labels should be clear.
+- Maintainability: separate frontend and backend modules.
+- Reliability: return explicit API errors.
+- Security: protect credentials and privileged operations.
+- Testability: test core API behavior automatically.
 
-## 7. Success Criteria
-
--   A student can create a request and later see its saved details and
-    status.
--   Staff can update a request's status through the application.
--   The frontend communicates with the backend through documented REST
-    endpoints.
--   In Beta, users can access only the actions allowed by their role and
-    permissions.
-
-## 8. Out of Scope
-
--   AI/ML features.
--   Payment processing.
--   Native mobile applications.
--   Integration with the university's official student information
-    system.
-
-## 9. Assumptions and Constraints
-
--   This is a course project and will be built incrementally.
--   The MVP prioritizes core CRUD operations and local development.
--   Authentication, RBAC, advanced permissions, and deployment are
-    planned for Beta.
--   Only necessary student/request information should be stored.
+## 10. Assumptions and risks
+This is a course project and initially a local demonstration. Real staff accounts and university service rules may not be available. Minimize personal data and use non-sensitive test data.

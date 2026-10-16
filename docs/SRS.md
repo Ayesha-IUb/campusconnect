@@ -1,178 +1,108 @@
 # Software Requirements Specification (SRS)
-
 ## CampusConnect: University Service Request Management System
 
-**Version:** 1.0\
-**Status:** Course project draft
+**Version:** 1.1 | **Status:** MVP planning document
 
 ## 1. Purpose
+This document defines CampusConnect's functional and non-functional requirements and provides a basis for implementation and testing.
 
-This document defines the functional and non-functional requirements for
-CampusConnect.
+## 2. Scope
+CampusConnect is a web application for students to submit and track university service requests and for staff to process them. The MVP covers creating, listing, retrieving, and updating request status. Authentication, role-based access, and administrator management are planned for Beta.
 
-## 2. System Overview
+**Included in MVP**
+- React + TypeScript user interface.
+- Python + FastAPI REST API.
+- Persistent storage for requests.
+- Input validation and clear API responses.
+- Tests for the main request workflow.
 
-CampusConnect consists of a React + TypeScript frontend and a FastAPI +
-Python backend. The frontend calls backend REST APIs. A relational
-database will persist users, services, and requests.
+**Not included in MVP**
+- University single sign-on.
+- Email/SMS notifications.
+- Native mobile apps.
+- Production analytics or university-system integrations.
 
-## 3. User Classes
+## 3. User classes
+- **Student:** submits requests and views them. Ownership checks are required once authentication is implemented.
+- **Staff:** reviews and processes requests; staff permissions are Beta scope.
+- **Administrator:** manages users, service categories, and permissions in Beta.
 
--   **Student:** accesses services and manages their own requests.
--   **Staff:** views and processes assigned requests.
--   **Administrator:** manages users, services, assignments, and
-    permissions.
+## 4. Operating environment
+- OS: Windows, macOS, or Linux for development.
+- Frontend: modern browser, React + TypeScript, Vite.
+- Backend: Python 3.11+ and FastAPI, served by Uvicorn.
+- Storage: SQLite is suitable for local MVP development; production choice is TBD.
+- API: JSON over HTTP using REST-style endpoints.
 
-## 4. Functional Requirements
+## 5. Functional requirements
+- SRS-FR-01: Create a service request from valid input.
+- SRS-FR-02: Require title, description, and category.
+- SRS-FR-03: Generate a unique ID for each saved request.
+- SRS-FR-04: Set initial status to `Submitted`.
+- SRS-FR-05: Return a list of requests.
+- SRS-FR-06: Return request details by ID.
+- SRS-FR-07: Update request status when the requested status is valid.
+- SRS-FR-08: Return not-found for an unknown request ID.
+- SRS-FR-09: Return a clear client error for invalid data.
+- SRS-FR-10: Beta protected operations require authentication.
+- SRS-FR-11: Beta staff/admin operations enforce role permissions.
 
-  -----------------------------------------------------------------------
-  ID                      Requirement             Priority
-  ----------------------- ----------------------- -----------------------
-  FR-01                   The system shall        MVP
-                          display the available   
-                          university services.    
+## 6. External interface requirements
+### User interface
+- Request form with title, description, and category.
+- Clear validation messages.
+- Request list showing ID, title, category, creation time, and status.
+- Status labels such as `Submitted`, `In Progress`, and `Resolved`.
 
-  FR-02                   A student shall be able MVP
-                          to create a service     
-                          request with a service, 
-                          title, and description. 
+### Planned API
+| Method | Endpoint | Purpose |
+|---|---|---|
+| GET | `/api/health` | Check backend availability |
+| POST | `/api/requests` | Create a request |
+| GET | `/api/requests` | List requests |
+| GET | `/api/requests/{request_id}` | Retrieve a request |
+| PATCH | `/api/requests/{request_id}/status` | Update status |
 
-  FR-03                   A student shall be able MVP
-                          to view their own       
-                          requests and each       
-                          request's status.       
+The request endpoints are planned until implemented and tested. The health endpoint is a separate backend check.
 
-  FR-04                   A student shall be able MVP
-                          to update or cancel an  
-                          eligible request.       
+### Data requirements
+A request record should include `id`, `title`, `description`, `category`, `status`, `created_at`, and optionally `updated_at`.
 
-  FR-05                   Staff shall be able to  MVP
-                          view requests available 
-                          or assigned to them.    
+## 7. Non-functional requirements
+- Performance: common local API requests should respond promptly.
+- Reliability: return meaningful HTTP status codes and errors.
+- Security: never commit secrets; protect privileged routes when auth is added.
+- Usability: the main workflow should be understandable without training.
+- Maintainability: organize routes, models, and components.
+- Testability: test successful and failed API requests.
 
-  FR-06                   Staff shall be able to  MVP
-                          update a request status 
-                          and add a processing    
-                          remark.                 
+## 8. Use cases
+### UC-1: Submit request
+1. Student opens the form and enters details.
+2. Frontend sends data to `POST /api/requests`.
+3. Backend validates and stores the request.
+4. System returns the saved request or a validation error.
 
-  FR-07                   The backend shall       MVP
-                          provide REST endpoints  
-                          for service and request 
-                          CRUD operations.        
+### UC-2: View requests
+1. User opens the request list.
+2. Frontend calls `GET /api/requests`.
+3. Backend returns available records.
+4. Frontend displays requests and statuses.
 
-  FR-08                   The system shall store  MVP
-                          services and requests   
-                          in a relational         
-                          database.               
+### UC-3: Update status
+1. Staff selects a request and a new status.
+2. Frontend sends the update.
+3. Backend validates status and authorization.
+4. Backend saves the change and returns the updated request.
+5. Frontend displays the new status.
 
-  FR-09                   Users shall be able to  Beta
-                          register and log in.    
+Proper identity and role checks are required before real-world deployment.
 
-  FR-10                   The system shall        Beta
-                          enforce Student, Staff, 
-                          and Administrator role  
-                          access.                 
-
-  FR-11                   Protected API           Beta
-                          operations shall        
-                          enforce explicit        
-                          permissions/scopes.     
-
-  FR-12                   Administrators shall    Beta
-                          manage users, services, 
-                          and staff assignments.  
-
-  FR-13                   The system shall        Beta
-                          provide                 
-                          role-appropriate        
-                          profile/dashboard       
-                          views.                  
-
-  FR-14                   The system shall        Beta
-                          support deployment with 
-                          environment-specific    
-                          configuration.          
-  -----------------------------------------------------------------------
-
-## 5. Main Use Cases
-
-### UC-01: Create a service request (MVP)
-
-1.  Student opens the service list.
-2.  Student selects a service and enters request details.
-3.  Frontend validates required fields and sends a request to the API.
-4.  Backend validates and stores the request.
-5.  System returns the created request and its initial status.
-
-### UC-02: Track a request (MVP)
-
-1.  Student opens their request list.
-2.  Frontend requests the student's requests from the API.
-3.  Backend returns only requests belonging to that student.
-4.  Student views details and status.
-
-### UC-03: Process a request (MVP)
-
-1.  Staff opens the request queue.
-2.  Staff selects a request.
-3.  Staff updates its status and adds a remark.
-4.  Backend validates and saves the update.
-5.  The updated status is shown to the user.
-
-### UC-04: Manage access (Beta)
-
-1.  Administrator assigns a role or permission.
-2.  Backend validates the administrator's authorization.
-3.  The system saves the change and applies it to protected API
-    operations.
-
-## 6. Data Requirements
-
--   **User:** id, name, email, role; authentication data will be added
-    for Beta.
--   **Service:** id, name, description, active status.
--   **ServiceRequest:** id, student id, service id, title, description,
-    status, assigned staff id (optional), remarks (optional),
-    created/updated timestamps.
-
-## 7. Interface Requirements
-
--   Frontend: React and TypeScript in a browser.
--   Backend: FastAPI REST API using JSON request/response bodies.
--   API documentation: OpenAPI/Swagger UI provided by FastAPI.
--   Database: relational database; exact engine may be selected during
-    implementation.
-
-## 8. Non-Functional Requirements
-
--   **Usability:** forms and status labels should be understandable to
-    university users.
--   **Reliability:** invalid input should return clear validation errors
-    rather than crash the application.
--   **Security (Beta):** protected operations must verify identity,
-    role, and required permissions.
--   **Privacy:** students must not be able to access other students'
-    private requests.
--   **Maintainability:** frontend, API routes, business logic, and data
-    access should be organized clearly.
--   **Performance:** common list and detail requests should return
-    promptly for a course-project-sized dataset.
-
-## 9. Validation and Error Handling
-
--   Required fields must not be empty.
--   Invalid IDs or unknown services should return an appropriate client
-    error.
--   Unauthorized operations should return an appropriate authorization
-    error in Beta.
--   API responses should use consistent JSON structures.
-
-## 10. Acceptance Criteria
-
--   MVP service and request operations work through the UI and REST API.
--   Created requests remain available after refresh/restart when
-    database persistence is implemented.
--   Students can only view and change their own requests.
--   Staff can update request status according to the defined workflow.
--   Beta role and permission checks are tested for allowed and denied
-    operations.
+## 9. Acceptance criteria
+- Valid input creates a saved record with a unique ID and initial status.
+- Missing required fields return a validation error.
+- Listing returns saved records.
+- Unknown IDs return not-found.
+- A valid status update persists.
+- Automated tests cover success and failure cases.
+- Beta protected routes reject unauthorized operations.
