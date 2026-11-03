@@ -664,3 +664,19 @@ button:disabled {
     grid-template-columns: 1fr 1fr;
   }
 }
+
+.auth-shell { min-height:100vh; display:grid; place-items:center; padding:24px; background:#f4f6fb; }
+.auth-card { width:min(100%,430px); padding:32px; border:1px solid #e7ebf3; border-radius:16px; background:#fff; box-shadow:0 16px 45px rgba(35,55,90,.08); }
+.auth-card > .brand-logo { margin:0 auto 12px; }
+.auth-card h1 { margin:0; text-align:center; color:#263750; font-size:25px; }
+.auth-card > p { margin:8px 0 24px; text-align:center; color:#7b8799; font-size:12px; }
+.auth-card form { display:flex; flex-direction:column; gap:9px; }
+.auth-card form label { margin-top:8px; color:#465777; font-size:12px; font-weight:700; }
+.auth-card form input { width:100%; box-sizing:border-box; border:1px solid #dfe5ef; border-radius:8px; padding:12px; font:inherit; }
+.auth-card form .primary-button { width:100%; margin-top:14px; }
+.auth-card > small { display:block; margin-top:18px; color:#7d899c; font-size:11px; line-height:1.6; }
+.auth-tabs { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:18px; padding:4px; background:#f1f4fa; border-radius:9px; }
+.auth-tabs button { padding:10px; border:0; border-radius:7px; color:#69778e; background:transparent; font-size:12px; font-weight:700; cursor:pointer; }
+.auth-tabs button.active { color:#3655b5; background:#fff; box-shadow:0 1px 4px rgba(0,0,0,.08); }
+.account-actions { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.account-actions .header-badge { max-width:100%; overflow-wrap:anywhere; }
