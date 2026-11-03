@@ -202,7 +202,7 @@ export default function App() {
   }
 
   const canCreate = profile?.role === "student" || profile?.role === "admin"
-  const canEdit = !!profile && (profile.role === "admin" || (profile.role === "student" && selected?.user_id === profile.id && selected.status === "Pending"))
+  const canEdit = !!profile && (profile.role === "admin" || profile.role === "staff" || (profile.role === "student" && selected?.user_id === profile.id && selected.status === "Pending"))
   const canDelete = !!profile && (profile.role === "admin" || (profile.role === "student" && selected?.user_id === profile.id && selected.status === "Pending"))
   const canChangeStatus = profile?.role === "admin" || profile?.role === "staff"
 
@@ -261,11 +261,11 @@ export default function App() {
             <div className="panel-heading"><div><h2>{editingId !== null ? "Edit request" : "Create a request"}</h2><p>{editingId !== null ? \`Updating request #\${editingId}\` : "Tell us what support you need."}</p></div></div>
             <form onSubmit={handleSubmit}>
               <label htmlFor="title">Request title</label>
-              <input id="title" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} minLength={3} maxLength={120} required />
+              <input id="title" disabled={profile.role === "staff"} value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} minLength={3} maxLength={120} required />
               <label htmlFor="description">Description</label>
-              <textarea id="description" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} minLength={5} maxLength={2000} rows={5} required />
+              <textarea id="description" disabled={profile.role === "staff"} value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} minLength={5} maxLength={2000} rows={5} required />
               <label htmlFor="category">Category</label>
-              <select id="category" value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value as Category }))}>{categories.map(c => <option key={c}>{c}</option>)}</select>
+              <select id="category" disabled={profile.role === "staff"} value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value as Category }))}>{categories.map(c => <option key={c}>{c}</option>)}</select>
               {editingId !== null && canChangeStatus && <>
                 <label htmlFor="status">Request status</label>
                 <select id="status" value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value as RequestStatus }))}>{statuses.map(s => <option key={s}>{s}</option>)}</select>
