@@ -37,7 +37,7 @@ async function authRequest(path: string, body: object): Promise<any> {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
     throw new Error("Authentication is not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to Vercel.")
   }
-  const response = await fetch(\`\${SUPABASE_URL}/auth/v1/\${path}\`, {
+  const response = await fetch(`${SUPABASE_URL}/auth/v1/${path}`, {
     method: "POST",
     headers: { "Content-Type": "application/json", apikey: SUPABASE_ANON_KEY },
     body: JSON.stringify(body),
@@ -52,13 +52,13 @@ async function apiRequest<T>(endpoint: string, session: Session, options: Reques
     ...options,
     headers: {
       "Content-Type": "application/json",
-      Authorization: \`Bearer \${session.access_token}\`,
+      Authorization: `Bearer ${session.access_token}`,
       ...options.headers,
     },
   })
   const data = await response.json().catch(() => null)
   if (!response.ok) {
-    const message = typeof data === "object" && data && "detail" in data ? String(data.detail) : \`Request failed (\${response.status})\`
+    const message = typeof data === "object" && data && "detail" in data ? String(data.detail) : `Request failed (${response.status})`
     throw new Error(message)
   }
   return data as T
@@ -122,9 +122,9 @@ export default function App() {
 
   function signOut() {
     if (session && SUPABASE_URL && SUPABASE_ANON_KEY) {
-      void fetch(\`\${SUPABASE_URL}/auth/v1/logout\`, {
+      void fetch(`${SUPABASE_URL}/auth/v1/logout`, {
         method: "POST",
-        headers: { apikey: SUPABASE_ANON_KEY, Authorization: \`Bearer \${session.access_token}\` },
+        headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${session.access_token}` },
       })
     }
     saveSession(null); setProfile(null); setRequests([]); setSelected(null)
@@ -157,7 +157,7 @@ export default function App() {
   async function selectRequest(id: number) {
     if (!session) return
     setError(""); setNotice("")
-    try { setSelected(await apiRequest<ServiceRequest>(\`/api/requests/\${id}\`, session)) }
+    try { setSelected(await apiRequest<ServiceRequest>(`/api/requests/${id}`, session)) }
     catch (err) { setError(err instanceof Error ? err.message : "Could not load request.") }
   }
 
@@ -168,7 +168,7 @@ export default function App() {
     const payload = { title: form.title.trim(), description: form.description.trim(), category: form.category }
     try {
       if (editingId !== null) {
-        const updated = await apiRequest<ServiceRequest>(\`/api/requests/\${editingId}\`, session, {
+        const updated = await apiRequest<ServiceRequest>(`/api/requests/${editingId}`, session, {
           method: "PUT", body: JSON.stringify({ ...payload, status: form.status }),
         })
         setRequests(current => current.map(item => item.id === updated.id ? updated : item))
@@ -191,10 +191,10 @@ export default function App() {
   }
 
   async function handleDelete() {
-    if (!session || !selected || !window.confirm(\`Delete "\${selected.title}"?\`)) return
+    if (!session || !selected || !window.confirm(`Delete "${selected.title}"?`)) return
     setError(""); setNotice("")
     try {
-      await apiRequest(\`/api/requests/\${selected.id}\`, session, { method: "DELETE" })
+      await apiRequest(`/api/requests/${selected.id}`, session, { method: "DELETE" })
       setRequests(current => current.filter(item => item.id !== selected.id))
       setSelected(null); setEditingId(null); setForm(emptyForm)
       setNotice("Service request deleted successfully.")
@@ -258,7 +258,7 @@ export default function App() {
         {notice && <div className="alert alert-success" role="status">{notice}</div>}
         <div className="workspace-grid">
           {canCreate && <section className="panel form-panel">
-            <div className="panel-heading"><div><h2>{editingId !== null ? "Edit request" : "Create a request"}</h2><p>{editingId !== null ? \`Updating request #\${editingId}\` : "Tell us what support you need."}</p></div></div>
+            <div className="panel-heading"><div><h2>{editingId !== null ? "Edit request" : "Create a request"}</h2><p>{editingId !== null ? `Updating request #${editingId}` : "Tell us what support you need."}</p></div></div>
             <form onSubmit={handleSubmit}>
               <label htmlFor="title">Request title</label>
               <input id="title" disabled={profile.role === "staff"} value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} minLength={3} maxLength={120} required />
@@ -277,8 +277,8 @@ export default function App() {
           <section className="panel list-panel">
             <div className="panel-heading list-heading"><div><h2>{profile.role === "student" ? "My requests" : "All requests"}</h2><p>{requests.length} request(s) found</p></div><span className="count-badge">{requests.length}</span></div>
             {requests.length === 0 ? <div className="empty-state">No requests yet.</div> : <div className="request-list">
-              {requests.map(request => <button type="button" key={request.id} className={\`request-card \${selected?.id === request.id ? "selected" : ""}\`} onClick={() => void selectRequest(request.id)}>
-                <div className="request-card-top"><span className="request-id">REQUEST #{request.id}</span><span className={\`status-pill status-\${request.status.toLowerCase().replace(" ", "-")}\`}>{request.status}</span></div>
+              {requests.map(request => <button type="button" key={request.id} className={`request-card ${selected?.id === request.id ? "selected" : ""}`} onClick={() => void selectRequest(request.id)}>
+                <div className="request-card-top"><span className="request-id">REQUEST #{request.id}</span><span className={`status-pill status-${request.status.toLowerCase().replace(" ", "-")}`}>{request.status}</span></div>
                 <h3>{request.title}</h3><p>{request.description}</p><div className="request-card-bottom"><span>{request.category}</span><span>{new Date(request.created_at).toLocaleString()}</span></div>
               </button>)}
             </div>}
