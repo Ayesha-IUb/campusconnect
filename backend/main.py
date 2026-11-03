@@ -24,7 +24,9 @@ if SUPABASE_URL and SUPABASE_SECRET_KEY:
 app = FastAPI(
     title="CampusConnect API",
     description="University Service Request Management API",
-    version="1.0.0"
+    version="1.0.0",
+    docs_url="/api/docs",
+    openapi_url="/api/openapi.json"
 )
 
 
