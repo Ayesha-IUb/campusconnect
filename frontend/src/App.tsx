@@ -276,7 +276,7 @@ export default function App() {
         {error && <div className="alert alert-error" role="alert">{error}</div>}
         {notice && <div className="alert alert-success" role="status">{notice}</div>}
         <div className="workspace-grid">
-          {canCreate && <section className="panel form-panel">
+          {(canCreate || (profile.role === "staff" && editingId !== null)) && <section className="panel form-panel">
             <div className="panel-heading"><div><h2>{editingId !== null ? "Edit request" : "Create a request"}</h2><p>{editingId !== null ? `Updating request #${editingId}` : "Tell us what support you need."}</p></div></div>
             <form onSubmit={handleSubmit}>
               <label htmlFor="title">Request title</label>
@@ -310,7 +310,7 @@ export default function App() {
             <div className="details-actions">
               {canEdit && <button className="secondary-button" onClick={() => startEditing(selected)}>Edit request</button>}
               {canDelete && <button className="danger-button" onClick={() => void handleDelete()}>Delete request</button>}
-              {profile.role === "staff" && <small>Staff can update status using the request status control when available to their workflow.</small>}
+              {profile.role === "staff" && <small>Staff can change request status only. Click Edit request to open the status control.</small>}
             </div>
           </div>}
         </section>
