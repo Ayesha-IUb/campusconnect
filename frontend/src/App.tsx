@@ -120,6 +120,24 @@ export default function App() {
     } finally { setBusy(false) }
   }
 
+  async function handleResendConfirmation() {
+    if (!email.trim()) {
+      setError("Enter your email address first.")
+      return
+    }
+    setBusy(true); setError(""); setNotice("")
+    try {
+      await authRequest("resend", {
+        type: "signup",
+        email: email.trim(),
+        options: { emailRedirectTo: "https://campusconnect-two-ivory.vercel.app" },
+      })
+      setNotice("A new confirmation email has been requested. Check your inbox and spam folder.")
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not resend the confirmation email.")
+    } finally { setBusy(false) }
+  }
+
   function signOut() {
     if (session && SUPABASE_URL && SUPABASE_ANON_KEY) {
       void fetch(`${SUPABASE_URL}/auth/v1/logout`, {
@@ -230,6 +248,7 @@ export default function App() {
           <label htmlFor="password">Password</label>
           <input id="password" type="password" value={password} onChange={e => setPassword(e.target.value)} required minLength={8} autoComplete={authMode === "login" ? "current-password" : "new-password"} />
           <button className="primary-button" type="submit" disabled={busy}>{busy ? "Please wait..." : authMode === "login" ? "Sign in" : "Create student account"}</button>
+          {authMode === "login" && <button className="secondary-button" type="button" onClick={() => void handleResendConfirmation()} disabled={busy || !email.trim()}>Resend confirmation email</button>}
         </form>
         <small>New accounts receive the Student role automatically. Staff and admin roles are assigned by an administrator.</small>
       </section>
