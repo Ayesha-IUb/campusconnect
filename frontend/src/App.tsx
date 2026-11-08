@@ -1,31 +1,12 @@
-
 import { useEffect, useState, type FormEvent } from "react"
-
-type Role = "student" | "staff" | "admin"
-type Category = "IT Support" | "Classroom" | "Facilities" | "Library" | "Other"
-type RequestStatus = "Pending" | "In Progress" | "Resolved" | "Rejected"
-
-interface Session {
-  access_token: string
-  refresh_token: string
-  user: { id: string; email: string }
-}
-interface Profile {
-  id: string
-  email: string
-  full_name: string
-  role: Role
-}
-interface ServiceRequest {
-  id: number
-  user_id: string | null
-  title: string
-  description: string
-  category: Category
-  status: RequestStatus
-  created_at: string
-  updated_at: string
-}
+import type {
+  Category,
+  RequestStatus,
+  Session,
+  Profile,
+  ServiceRequest
+} from "./types"
+import RequestList from "./components/RequestList"
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
@@ -293,15 +274,12 @@ export default function App() {
               {editingId !== null && <button className="secondary-button" type="button" onClick={() => { setEditingId(null); setForm(emptyForm); }}>Cancel editing</button>}
             </form>
           </section>}
-          <section className="panel list-panel">
-            <div className="panel-heading list-heading"><div><h2>{profile.role === "student" ? "My requests" : "All requests"}</h2><p>{requests.length} request(s) found</p></div><span className="count-badge">{requests.length}</span></div>
-            {requests.length === 0 ? <div className="empty-state">No requests yet.</div> : <div className="request-list">
-              {requests.map(request => <button type="button" key={request.id} className={`request-card ${selected?.id === request.id ? "selected" : ""}`} onClick={() => void selectRequest(request.id)}>
-                <div className="request-card-top"><span className="request-id">REQUEST #{request.id}</span><span className={`status-pill status-${request.status.toLowerCase().replace(" ", "-")}`}>{request.status}</span></div>
-                <h3>{request.title}</h3><p>{request.description}</p><div className="request-card-bottom"><span>{request.category}</span><span>{new Date(request.created_at).toLocaleString()}</span></div>
-              </button>)}
-            </div>}
-          </section>
+          <RequestList
+            requests={requests}
+            selected={selected}
+            isStudent={profile.role === "student"}
+            onSelect={(id) => void selectRequest(id)}
+          />
         </div>
         <section className="panel details-panel"><div className="panel-heading"><div><h2>Request details</h2><p>View the complete information of a request.</p></div></div>
           {!selected ? <div className="empty-state">Select a request to see its details.</div> : <div className="details-content">
