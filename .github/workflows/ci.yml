@@ -29,8 +29,8 @@ jobs:
         working-directory: frontend
         run: npm run build
 
-  backend-syntax:
-    name: Backend Python syntax check
+  backend-check:
+    name: Backend syntax and FastAPI import check
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -39,5 +39,11 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+      - name: Install backend dependencies
+        run: python -m pip install -r backend/requirements.txt
       - name: Compile backend modules
         run: python -m compileall -q backend
+      - name: Import FastAPI app and verify routes
+        working-directory: backend
+        run: |
+          python -c "from main import app; paths = {route.path for route in app.routes}; required = {'/api/health', '/api/me', '/api/requests', '/api/requests/{request_id}'}; missing = required - paths; assert not missing, f'Missing API routes: {missing}'; print('FastAPI app imported and all expected routes registered.')"
