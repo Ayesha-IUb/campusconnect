@@ -57,7 +57,7 @@ export default function RequestForm({
           <h2>{editingId !== null ? "Edit request" : "Create a request"}</h2>
           <p>
             {editingId !== null
-              ? \`Updating request #\${editingId}\`
+              ? "Updating request #" + editingId
               : "Tell us what support you need."}
           </p>
         </div>

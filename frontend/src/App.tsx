@@ -12,6 +12,7 @@ import RequestDetails from "./components/RequestDetails"
 import RequestForm, { type RequestFormValues } from "./components/RequestForm"
 import RequestList from "./components/RequestList"
 import RequestStats from "./components/RequestStats"
+import Sidebar from "./components/Sidebar"
 import { apiRequest, authRequest, logoutRequest } from "./services/api"
 
 const emptyForm: RequestFormValues = {
@@ -170,7 +171,7 @@ export default function App() {
     setNotice("")
 
     try {
-      const request = await apiRequest<ServiceRequest>(\`/api/requests/\${id}\`, session)
+      const request = await apiRequest<ServiceRequest>("/api/requests/" + id, session)
       setSelected(request)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not load request.")
@@ -194,7 +195,7 @@ export default function App() {
     try {
       if (editingId !== null) {
         const updated = await apiRequest<ServiceRequest>(
-          \`/api/requests/\${editingId}\`,
+          "/api/requests/" + editingId,
           session,
           {
             method: "PUT",
@@ -236,13 +237,13 @@ export default function App() {
   }
 
   async function handleDelete() {
-    if (!session || !selected || !window.confirm(\`Delete "\${selected.title}"?\`)) return
+    if (!session || !selected || !window.confirm("Delete \"" + selected.title + "\"?")) return
 
     setError("")
     setNotice("")
 
     try {
-      await apiRequest(\`/api/requests/\${selected.id}\`, session, { method: "DELETE" })
+      await apiRequest("/api/requests/" + selected.id, session, { method: "DELETE" })
       setRequests(current => current.filter(item => item.id !== selected.id))
       setSelected(null)
       setEditingId(null)
@@ -302,9 +303,10 @@ export default function App() {
 
   return (
     <div className="app-shell">
-      <PageHeader profile={profile} onSignOut={signOut} />
+      <Sidebar profile={profile} />
 
       <main className="main-area">
+        <PageHeader profile={profile} onSignOut={signOut} />
         <RequestStats requests={requests} isStudent={profile.role === "student"} />
 
         {error && <div className="alert alert-error" role="alert">{error}</div>}
@@ -320,8 +322,8 @@ export default function App() {
               saving={saving}
               onTitleChange={value => setForm(current => ({ ...current, title: value }))}
               onDescriptionChange={value => setForm(current => ({ ...current, description: value }))}
-              onCategoryChange={value => setForm(current => ({ ...current, category: value }))}
-              onStatusChange={value => setForm(current => ({ ...current, status: value }))}
+              onCategoryChange={(value: Category) => setForm(current => ({ ...current, category: value }))}
+              onStatusChange={(value: RequestStatus) => setForm(current => ({ ...current, status: value }))}
               onSubmit={handleSubmit}
               onCancel={() => {
                 setEditingId(null)
