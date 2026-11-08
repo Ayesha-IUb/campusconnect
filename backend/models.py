@@ -4,7 +4,8 @@ The PostgreSQL table definitions and constraints are maintained in migrations/.
 These TypedDicts describe the Python data exchanged by the API and services.
 """
 
-from typing import Literal, TypedDict
+from typing import Literal
+from typing_extensions import TypedDict
 
 Role = Literal["student", "staff", "admin"]
 
