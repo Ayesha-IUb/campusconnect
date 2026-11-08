@@ -1,22 +1,33 @@
-
 import { useEffect, useState, type FormEvent } from "react"
 import type {
   Category,
   RequestStatus,
   Session,
   Profile,
-  ServiceRequest
+  ServiceRequest,
 } from "./types"
+import AuthForm from "./components/AuthForm"
+import PageHeader from "./components/PageHeader"
+import RequestDetails from "./components/RequestDetails"
+import RequestForm, { type RequestFormValues } from "./components/RequestForm"
 import RequestList from "./components/RequestList"
+import RequestStats from "./components/RequestStats"
 import { apiRequest, authRequest, logoutRequest } from "./services/api"
 
-const categories: Category[] = ["IT Support", "Classroom", "Facilities", "Library", "Other"]
-const statuses: RequestStatus[] = ["Pending", "In Progress", "Resolved", "Rejected"]
-const emptyForm = { title: "", description: "", category: "Other" as Category, status: "Pending" as RequestStatus }
+const emptyForm: RequestFormValues = {
+  title: "",
+  description: "",
+  category: "Other",
+  status: "Pending",
+}
 
 export default function App() {
   const [session, setSession] = useState<Session | null>(() => {
-    try { return JSON.parse(localStorage.getItem("campusconnect_session") || "null") } catch { return null }
+    try {
+      return JSON.parse(localStorage.getItem("campusconnect_session") || "null")
+    } catch {
+      return null
+    }
   })
   const [profile, setProfile] = useState<Profile | null>(null)
   const [authMode, setAuthMode] = useState<"login" | "signup">("login")
@@ -25,7 +36,7 @@ export default function App() {
   const [fullName, setFullName] = useState("")
   const [requests, setRequests] = useState<ServiceRequest[]>([])
   const [selected, setSelected] = useState<ServiceRequest | null>(null)
-  const [form, setForm] = useState(emptyForm)
+  const [form, setForm] = useState<RequestFormValues>(emptyForm)
   const [editingId, setEditingId] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -35,8 +46,11 @@ export default function App() {
 
   function saveSession(next: Session | null) {
     setSession(next)
-    if (next) localStorage.setItem("campusconnect_session", JSON.stringify(next))
-    else localStorage.removeItem("campusconnect_session")
+    if (next) {
+      localStorage.setItem("campusconnect_session", JSON.stringify(next))
+    } else {
+      localStorage.removeItem("campusconnect_session")
+    }
   }
 
   async function loadProfile(current: Session) {
@@ -46,13 +60,16 @@ export default function App() {
 
   async function handleAuth(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    setBusy(true); setError(""); setNotice("")
+    setBusy(true)
+    setError("")
+    setNotice("")
+
     try {
       if (authMode === "signup") {
         const next = await authRequest("signup", {
           email,
           password,
-          data: { full_name: fullName }
+          data: { full_name: fullName },
         })
 
         if (!next.access_token) {
@@ -61,15 +78,16 @@ export default function App() {
           return
         }
 
-        saveSession(next)
-        await loadProfile(next)
+        saveSession(next as Session)
+        await loadProfile(next as Session)
       } else {
         const next = await authRequest("token?grant_type=password", { email, password })
-        saveSession(next)
-        await loadProfile(next)
+        saveSession(next as Session)
+        await loadProfile(next as Session)
       }
     } catch (err) {
-      saveSession(null); setProfile(null)
+      saveSession(null)
+      setProfile(null)
       setError(err instanceof Error ? err.message : "Could not sign in.")
     } finally {
       setBusy(false)
@@ -82,7 +100,10 @@ export default function App() {
       return
     }
 
-    setBusy(true); setError(""); setNotice("")
+    setBusy(true)
+    setError("")
+    setNotice("")
+
     try {
       await authRequest("resend", {
         type: "signup",
@@ -98,9 +119,7 @@ export default function App() {
   }
 
   function signOut() {
-    if (session) {
-      logoutRequest(session)
-    }
+    if (session) logoutRequest(session)
     saveSession(null)
     setProfile(null)
     setRequests([])
@@ -147,12 +166,12 @@ export default function App() {
 
   async function selectRequest(id: number) {
     if (!session) return
-
     setError("")
     setNotice("")
 
     try {
-      setSelected(await apiRequest<ServiceRequest>(`/api/requests/${id}`, session))
+      const request = await apiRequest<ServiceRequest>(\`/api/requests/\${id}\`, session)
+      setSelected(request)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not load request.")
     }
@@ -169,32 +188,28 @@ export default function App() {
     const payload = {
       title: form.title.trim(),
       description: form.description.trim(),
-      category: form.category
+      category: form.category,
     }
 
     try {
       if (editingId !== null) {
         const updated = await apiRequest<ServiceRequest>(
-          `/api/requests/${editingId}`,
+          \`/api/requests/\${editingId}\`,
           session,
           {
             method: "PUT",
             body: JSON.stringify({ ...payload, status: form.status }),
-          }
+          },
         )
 
         setRequests(current => current.map(item => item.id === updated.id ? updated : item))
         setSelected(updated)
         setNotice("Service request updated successfully.")
       } else {
-        const created = await apiRequest<ServiceRequest>(
-          "/api/requests",
-          session,
-          {
-            method: "POST",
-            body: JSON.stringify(payload),
-          }
-        )
+        const created = await apiRequest<ServiceRequest>("/api/requests", session, {
+          method: "POST",
+          body: JSON.stringify(payload),
+        })
 
         setRequests(current => [created, ...current])
         setSelected(created)
@@ -216,21 +231,18 @@ export default function App() {
       title: request.title,
       description: request.description,
       category: request.category,
-      status: request.status
+      status: request.status,
     })
   }
 
   async function handleDelete() {
-    if (!session || !selected || !window.confirm(`Delete "${selected.title}"?`)) return
+    if (!session || !selected || !window.confirm(\`Delete "\${selected.title}"?\`)) return
 
     setError("")
     setNotice("")
 
     try {
-      await apiRequest(`/api/requests/${selected.id}`, session, {
-        method: "DELETE"
-      })
-
+      await apiRequest(\`/api/requests/\${selected.id}\`, session, { method: "DELETE" })
       setRequests(current => current.filter(item => item.id !== selected.id))
       setSelected(null)
       setEditingId(null)
@@ -242,7 +254,6 @@ export default function App() {
   }
 
   const canCreate = profile?.role === "student" || profile?.role === "admin"
-
   const canEdit = !!profile && (
     profile.role === "admin" ||
     profile.role === "staff" ||
@@ -250,14 +261,12 @@ export default function App() {
       selected?.user_id === profile.id &&
       selected.status === "Pending")
   )
-
   const canDelete = !!profile && (
     profile.role === "admin" ||
     (profile.role === "student" &&
       selected?.user_id === profile.id &&
       selected.status === "Pending")
   )
-
   const canChangeStatus = profile?.role === "admin" || profile?.role === "staff"
 
   if (loading) {
@@ -270,286 +279,73 @@ export default function App() {
 
   if (!session || !profile) {
     return (
-      <main className="auth-shell">
-        <section className="auth-card">
-          <div className="brand-logo">CC</div>
-          <h1>CampusConnect</h1>
-          <p>University Service Request Management</p>
-
-          <div className="auth-tabs">
-            <button
-              className={authMode === "login" ? "active" : ""}
-              onClick={() => { setAuthMode("login"); setError(""); }}
-            >
-              Sign in
-            </button>
-            <button
-              className={authMode === "signup" ? "active" : ""}
-              onClick={() => { setAuthMode("signup"); setError(""); }}
-            >
-              Create account
-            </button>
-          </div>
-
-          {error && <div className="alert alert-error">{error}</div>}
-          {notice && <div className="alert alert-success">{notice}</div>}
-
-          <form onSubmit={handleAuth}>
-            {authMode === "signup" && (
-              <>
-                <label htmlFor="fullName">Full name</label>
-                <input
-                  id="fullName"
-                  value={fullName}
-                  onChange={e => setFullName(e.target.value)}
-                  required
-                  maxLength={100}
-                />
-              </>
-            )}
-
-            <label htmlFor="email">Email</label>
-            <input
-              id="email"
-              type="email"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              required
-              autoComplete="email"
-            />
-
-            <label htmlFor="password">Password</label>
-            <input
-              id="password"
-              type="password"
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              required
-              minLength={8}
-              autoComplete={authMode === "login" ? "current-password" : "new-password"}
-            />
-
-            <button className="primary-button" type="submit" disabled={busy}>
-              {busy ? "Please wait..." : authMode === "login" ? "Sign in" : "Create student account"}
-            </button>
-
-            {authMode === "login" && (
-              <button
-                className="secondary-button"
-                type="button"
-                onClick={() => void handleResendConfirmation()}
-                disabled={busy || !email.trim()}
-              >
-                Resend confirmation email
-              </button>
-            )}
-          </form>
-
-          <small>
-            New accounts receive the Student role automatically. Staff and admin roles are assigned by an administrator.
-          </small>
-        </section>
-      </main>
+      <AuthForm
+        authMode={authMode}
+        email={email}
+        password={password}
+        fullName={fullName}
+        busy={busy}
+        error={error}
+        notice={notice}
+        onModeChange={mode => {
+          setAuthMode(mode)
+          setError("")
+        }}
+        onEmailChange={setEmail}
+        onPasswordChange={setPassword}
+        onFullNameChange={setFullName}
+        onSubmit={handleAuth}
+        onResendConfirmation={() => void handleResendConfirmation()}
+      />
     )
   }
 
   return (
     <div className="app-shell">
-      <aside className="sidebar">
-        <div className="brand">
-          <div className="brand-logo">CC</div>
-          <div>
-            <h2>CampusConnect</h2>
-            <span>University Services</span>
-          </div>
-        </div>
-
-        <div className="nav-label">WORKSPACE</div>
-        <div className="nav-item active">▣ Service Requests</div>
-
-        <div className="sidebar-bottom">
-          <div className="profile-avatar">
-            {profile.full_name.slice(0, 1).toUpperCase() || "U"}
-          </div>
-          <div>
-            <strong>{profile.full_name || profile.email}</strong>
-            <span>{profile.role.toUpperCase()}</span>
-          </div>
-        </div>
-      </aside>
+      <PageHeader profile={profile} onSignOut={signOut} />
 
       <main className="main-area">
-        <header className="page-header">
-          <div>
-            <span className="eyebrow">{profile.role.toUpperCase()} WORKSPACE</span>
-            <h1>Service Requests</h1>
-            <p>Submit, review and manage university service requests.</p>
-          </div>
-
-          <div className="account-actions">
-            <span className="header-badge">{profile.email} · {profile.role}</span>
-            <button className="secondary-button" onClick={signOut}>
-              Sign out
-            </button>
-          </div>
-        </header>
-
-        <section className="stats-grid">
-          <div className="stat-card">
-            <span>{profile.role === "student" ? "My requests" : "Total requests"}</span>
-            <strong>{requests.length}</strong>
-            <small>Visible requests</small>
-          </div>
-
-          <div className="stat-card">
-            <span>Pending</span>
-            <strong>{requests.filter(r => r.status === "Pending").length}</strong>
-            <small>Waiting for attention</small>
-          </div>
-
-          <div className="stat-card">
-            <span>In progress</span>
-            <strong>{requests.filter(r => r.status === "In Progress").length}</strong>
-            <small>Currently being handled</small>
-          </div>
-        </section>
+        <RequestStats requests={requests} isStudent={profile.role === "student"} />
 
         {error && <div className="alert alert-error" role="alert">{error}</div>}
         {notice && <div className="alert alert-success" role="status">{notice}</div>}
 
         <div className="workspace-grid">
           {(canCreate || (profile.role === "staff" && editingId !== null)) && (
-            <section className="panel form-panel">
-              <div className="panel-heading">
-                <div>
-                  <h2>{editingId !== null ? "Edit request" : "Create a request"}</h2>
-                  <p>
-                    {editingId !== null
-                      ? `Updating request #${editingId}`
-                      : "Tell us what support you need."}
-                  </p>
-                </div>
-              </div>
-
-              <form onSubmit={handleSubmit}>
-                <label htmlFor="title">Request title</label>
-                <input
-                  id="title"
-                  disabled={profile.role === "staff"}
-                  value={form.title}
-                  onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
-                  minLength={3}
-                  maxLength={120}
-                  required
-                />
-
-                <label htmlFor="description">Description</label>
-                <textarea
-                  id="description"
-                  disabled={profile.role === "staff"}
-                  value={form.description}
-                  onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-                  minLength={5}
-                  maxLength={2000}
-                  rows={5}
-                  required
-                />
-
-                <label htmlFor="category">Category</label>
-                <select
-                  id="category"
-                  disabled={profile.role === "staff"}
-                  value={form.category}
-                  onChange={e => setForm(f => ({ ...f, category: e.target.value as Category }))}
-                >
-                  {categories.map(c => <option key={c}>{c}</option>)}
-                </select>
-
-                {editingId !== null && canChangeStatus && (
-                  <>
-                    <label htmlFor="status">Request status</label>
-                    <select
-                      id="status"
-                      value={form.status}
-                      onChange={e => setForm(f => ({ ...f, status: e.target.value as RequestStatus }))}
-                    >
-                      {statuses.map(s => <option key={s}>{s}</option>)}
-                    </select>
-                  </>
-                )}
-
-                <button className="primary-button" type="submit" disabled={saving}>
-                  {saving ? "Saving..." : editingId !== null ? "Save changes" : "Submit request"}
-                </button>
-
-                {editingId !== null && (
-                  <button
-                    className="secondary-button"
-                    type="button"
-                    onClick={() => { setEditingId(null); setForm(emptyForm); }}
-                  >
-                    Cancel editing
-                  </button>
-                )}
-              </form>
-            </section>
+            <RequestForm
+              form={form}
+              editingId={editingId}
+              isStaff={profile.role === "staff"}
+              canChangeStatus={!!canChangeStatus}
+              saving={saving}
+              onTitleChange={value => setForm(current => ({ ...current, title: value }))}
+              onDescriptionChange={value => setForm(current => ({ ...current, description: value }))}
+              onCategoryChange={value => setForm(current => ({ ...current, category: value }))}
+              onStatusChange={value => setForm(current => ({ ...current, status: value }))}
+              onSubmit={handleSubmit}
+              onCancel={() => {
+                setEditingId(null)
+                setForm(emptyForm)
+              }}
+            />
           )}
 
           <RequestList
             requests={requests}
             selected={selected}
             isStudent={profile.role === "student"}
-            onSelect={(id) => void selectRequest(id)}
+            onSelect={id => void selectRequest(id)}
           />
         </div>
 
-        <section className="panel details-panel">
-          <div className="panel-heading">
-            <div>
-              <h2>Request details</h2>
-              <p>View the complete information of a request.</p>
-            </div>
-          </div>
-
-          {!selected ? (
-            <div className="empty-state">Select a request to see its details.</div>
-          ) : (
-            <div className="details-content">
-              <div className="details-main">
-                <span className="request-id">REQUEST #{selected.id}</span>
-                <h2>{selected.title}</h2>
-                <p>{selected.description}</p>
-              </div>
-
-              <div className="details-meta">
-                <div><span>Category</span><strong>{selected.category}</strong></div>
-                <div><span>Status</span><strong>{selected.status}</strong></div>
-                <div><span>Created</span><strong>{new Date(selected.created_at).toLocaleString()}</strong></div>
-                <div><span>Updated</span><strong>{new Date(selected.updated_at).toLocaleString()}</strong></div>
-              </div>
-
-              <div className="details-actions">
-                {canEdit && (
-                  <button className="secondary-button" onClick={() => startEditing(selected)}>
-                    Edit request
-                  </button>
-                )}
-
-                {canDelete && (
-                  <button className="danger-button" onClick={() => void handleDelete()}>
-                    Delete request
-                  </button>
-                )}
-
-                {profile.role === "staff" && (
-                  <small>
-                    Staff can change request status only. Click Edit request to open the status control.
-                  </small>
-                )}
-              </div>
-            </div>
-          )}
-        </section>
+        <RequestDetails
+          selected={selected}
+          canEdit={canEdit}
+          canDelete={canDelete}
+          isStaff={profile.role === "staff"}
+          onEdit={startEditing}
+          onDelete={() => void handleDelete()}
+        />
 
         <footer className="page-footer">
           CampusConnect · University Service Request Management
