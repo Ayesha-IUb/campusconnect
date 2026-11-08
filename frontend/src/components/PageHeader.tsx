@@ -13,12 +13,9 @@ export default function PageHeader({ profile, onSignOut }: PageHeaderProps) {
         <h1>Service Requests</h1>
         <p>Submit, review and manage university service requests.</p>
       </div>
-
       <div className="account-actions">
         <span className="header-badge">{profile.email} · {profile.role}</span>
-        <button className="secondary-button" onClick={onSignOut}>
-          Sign out
-        </button>
+        <button className="secondary-button" onClick={onSignOut}>Sign out</button>
       </div>
     </header>
   )

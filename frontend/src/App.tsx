@@ -1,11 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react"
-import type {
-  Category,
-  RequestStatus,
-  Session,
-  Profile,
-  ServiceRequest,
-} from "./types"
+import type { Category, RequestStatus, Session, Profile, ServiceRequest } from "./types"
 import AuthForm from "./components/AuthForm"
 import PageHeader from "./components/PageHeader"
 import RequestDetails from "./components/RequestDetails"
@@ -47,16 +41,12 @@ export default function App() {
 
   function saveSession(next: Session | null) {
     setSession(next)
-    if (next) {
-      localStorage.setItem("campusconnect_session", JSON.stringify(next))
-    } else {
-      localStorage.removeItem("campusconnect_session")
-    }
+    if (next) localStorage.setItem("campusconnect_session", JSON.stringify(next))
+    else localStorage.removeItem("campusconnect_session")
   }
 
   async function loadProfile(current: Session) {
-    const me = await apiRequest<Profile>("/api/me", current)
-    setProfile(me)
+    setProfile(await apiRequest<Profile>("/api/me", current))
   }
 
   async function handleAuth(event: FormEvent<HTMLFormElement>) {
@@ -66,26 +56,19 @@ export default function App() {
     setNotice("")
 
     try {
-      if (authMode === "signup") {
-        const next = await authRequest("signup", {
-          email,
-          password,
-          data: { full_name: fullName },
-        })
+      const result = authMode === "signup"
+        ? await authRequest("signup", { email, password, data: { full_name: fullName } })
+        : await authRequest("token?grant_type=password", { email, password })
 
-        if (!next.access_token) {
-          setNotice("Account created. Check your email to confirm it, then sign in.")
-          setAuthMode("login")
-          return
-        }
-
-        saveSession(next as Session)
-        await loadProfile(next as Session)
-      } else {
-        const next = await authRequest("token?grant_type=password", { email, password })
-        saveSession(next as Session)
-        await loadProfile(next as Session)
+      if (authMode === "signup" && !result.access_token) {
+        setNotice("Account created. Check your email to confirm it, then sign in.")
+        setAuthMode("login")
+        return
       }
+
+      const next = result as Session
+      saveSession(next)
+      await loadProfile(next)
     } catch (err) {
       saveSession(null)
       setProfile(null)
@@ -100,11 +83,9 @@ export default function App() {
       setError("Enter your email address first.")
       return
     }
-
     setBusy(true)
     setError("")
     setNotice("")
-
     try {
       await authRequest("resend", {
         type: "signup",
@@ -132,19 +113,16 @@ export default function App() {
   }
 
   async function loadRequests(current: Session) {
-    const data = await apiRequest<ServiceRequest[]>("/api/requests", current)
-    setRequests(data)
+    setRequests(await apiRequest<ServiceRequest[]>("/api/requests", current))
   }
 
   useEffect(() => {
     let active = true
-
     async function initialize() {
       if (!session) {
         setLoading(false)
         return
       }
-
       try {
         await loadProfile(session)
         await loadRequests(session)
@@ -158,21 +136,16 @@ export default function App() {
         if (active) setLoading(false)
       }
     }
-
     void initialize()
-    return () => {
-      active = false
-    }
+    return () => { active = false }
   }, [])
 
   async function selectRequest(id: number) {
     if (!session) return
     setError("")
     setNotice("")
-
     try {
-      const request = await apiRequest<ServiceRequest>("/api/requests/" + id, session)
-      setSelected(request)
+      setSelected(await apiRequest<ServiceRequest>("/api/requests/" + id, session))
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not load request.")
     }
@@ -181,7 +154,6 @@ export default function App() {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!session || !profile) return
-
     setSaving(true)
     setError("")
     setNotice("")
@@ -197,26 +169,21 @@ export default function App() {
         const updated = await apiRequest<ServiceRequest>(
           "/api/requests/" + editingId,
           session,
-          {
-            method: "PUT",
-            body: JSON.stringify({ ...payload, status: form.status }),
-          },
+          { method: "PUT", body: JSON.stringify({ ...payload, status: form.status }) },
         )
-
         setRequests(current => current.map(item => item.id === updated.id ? updated : item))
         setSelected(updated)
         setNotice("Service request updated successfully.")
       } else {
-        const created = await apiRequest<ServiceRequest>("/api/requests", session, {
-          method: "POST",
-          body: JSON.stringify(payload),
-        })
-
+        const created = await apiRequest<ServiceRequest>(
+          "/api/requests",
+          session,
+          { method: "POST", body: JSON.stringify(payload) },
+        )
         setRequests(current => [created, ...current])
         setSelected(created)
         setNotice("Service request submitted successfully.")
       }
-
       setEditingId(null)
       setForm(emptyForm)
     } catch (err) {
@@ -238,10 +205,8 @@ export default function App() {
 
   async function handleDelete() {
     if (!session || !selected || !window.confirm("Delete \"" + selected.title + "\"?")) return
-
     setError("")
     setNotice("")
-
     try {
       await apiRequest("/api/requests/" + selected.id, session, { method: "DELETE" })
       setRequests(current => current.filter(item => item.id !== selected.id))
@@ -258,24 +223,16 @@ export default function App() {
   const canEdit = !!profile && (
     profile.role === "admin" ||
     profile.role === "staff" ||
-    (profile.role === "student" &&
-      selected?.user_id === profile.id &&
-      selected.status === "Pending")
+    (profile.role === "student" && selected?.user_id === profile.id && selected.status === "Pending")
   )
   const canDelete = !!profile && (
     profile.role === "admin" ||
-    (profile.role === "student" &&
-      selected?.user_id === profile.id &&
-      selected.status === "Pending")
+    (profile.role === "student" && selected?.user_id === profile.id && selected.status === "Pending")
   )
   const canChangeStatus = profile?.role === "admin" || profile?.role === "staff"
 
   if (loading) {
-    return (
-      <main className="auth-shell">
-        <div className="auth-card">Loading CampusConnect...</div>
-      </main>
-    )
+    return <main className="auth-shell"><div className="auth-card">Loading CampusConnect...</div></main>
   }
 
   if (!session || !profile) {
@@ -288,10 +245,7 @@ export default function App() {
         busy={busy}
         error={error}
         notice={notice}
-        onModeChange={mode => {
-          setAuthMode(mode)
-          setError("")
-        }}
+        onModeChange={mode => { setAuthMode(mode); setError("") }}
         onEmailChange={setEmail}
         onPasswordChange={setPassword}
         onFullNameChange={setFullName}
@@ -304,7 +258,6 @@ export default function App() {
   return (
     <div className="app-shell">
       <Sidebar profile={profile} />
-
       <main className="main-area">
         <PageHeader profile={profile} onSignOut={signOut} />
         <RequestStats requests={requests} isStudent={profile.role === "student"} />
@@ -325,10 +278,7 @@ export default function App() {
               onCategoryChange={(value: Category) => setForm(current => ({ ...current, category: value }))}
               onStatusChange={(value: RequestStatus) => setForm(current => ({ ...current, status: value }))}
               onSubmit={handleSubmit}
-              onCancel={() => {
-                setEditingId(null)
-                setForm(emptyForm)
-              }}
+              onCancel={() => { setEditingId(null); setForm(emptyForm) }}
             />
           )}
 
@@ -349,9 +299,7 @@ export default function App() {
           onDelete={() => void handleDelete()}
         />
 
-        <footer className="page-footer">
-          CampusConnect · University Service Request Management
-        </footer>
+        <footer className="page-footer">CampusConnect · University Service Request Management</footer>
       </main>
     </div>
   )
