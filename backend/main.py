@@ -1,26 +1,28 @@
 """CampusConnect FastAPI application entrypoint."""
-
 from fastapi import FastAPI
 
 from database import supabase
+from routers.admin import router as admin_router
+from routers.auth import router as auth_router
+from routers.groups import router as groups_router
 from routers.requests import router as requests_router
 from routers.users import router as users_router
 
 app = FastAPI(
     title="CampusConnect API",
     description="University Service Request Management API",
-    version="1.0.0",
+    version="2.0.0",
     docs_url="/api/docs",
     openapi_url="/api/openapi.json",
 )
 
+app.include_router(auth_router)
 app.include_router(users_router)
 app.include_router(requests_router)
+app.include_router(groups_router)
+app.include_router(admin_router)
 
 
 @app.get("/api/health", tags=["Health"])
 def health() -> dict[str, bool | str]:
-    return {
-        "status": "ok",
-        "database_configured": supabase is not None,
-    }
+    return {"status": "ok", "database_configured": supabase is not None}
