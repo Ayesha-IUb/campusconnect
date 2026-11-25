@@ -22,7 +22,7 @@ def create_group(payload: GroupCreate, request: Request,
 
 @router.get("/{group_id}")
 def group_members(group_id: str, user: CurrentUser = Depends(get_current_user)):
-    return {"group_id": group_id, "members": group_service.list_members(group_id, user)}
+    return group_service.list_members(group_id, user)
 
 
 @router.patch("/{group_id}")

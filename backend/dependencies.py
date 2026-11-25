@@ -1,20 +1,23 @@
-"""Authentication and session verification dependencies."""
+"""Authentication, active-session and ban enforcement dependencies."""
 import hashlib
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from database import execute_query, get_database
 from models import CurrentUser, Role
+from services.activity_service import record_security_event
 
 bearer_scheme = HTTPBearer(auto_error=False)
 APP_ROLES: set[Role] = {"student", "staff", "admin"}
 
 
 def get_current_user(
+    request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
 ) -> CurrentUser:
     if credentials is None:
+        record_security_event("token_missing", request)
         raise HTTPException(status_code=401, detail="Sign in is required.",
                             headers={"WWW-Authenticate": "Bearer"})
     db = get_database()
@@ -25,10 +28,12 @@ def get_current_user(
         if claims is None and isinstance(verified, dict):
             claims = verified.get("claims")
     except Exception as exc:
+        record_security_event("token_rejected", request)
         raise HTTPException(status_code=401, detail="Invalid or expired access token.",
                             headers={"WWW-Authenticate": "Bearer"}) from exc
 
     if not isinstance(claims, dict) or not claims.get("sub"):
+        record_security_event("token_rejected", request)
         raise HTTPException(status_code=401, detail="Invalid access token.")
 
     user_id = str(claims["sub"])
@@ -40,6 +45,7 @@ def get_current_user(
         raise HTTPException(status_code=403, detail="User profile was not found.")
     profile = profile_result.data[0]
     if profile.get("is_banned"):
+        record_security_event("banned_request_rejected", request, actor_id=user_id)
         raise HTTPException(status_code=403, detail="This account is banned.")
     role = profile.get("role")
     if role not in APP_ROLES:
@@ -51,6 +57,7 @@ def get_current_user(
         .is_("revoked_at", "null").limit(1)
     )
     if not session_result.data:
+        record_security_event("session_rejected", request, actor_id=user_id)
         raise HTTPException(status_code=401, detail="Session expired or revoked. Please sign in again.",
                             headers={"WWW-Authenticate": "Bearer"})
 

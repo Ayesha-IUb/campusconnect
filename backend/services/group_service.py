@@ -58,7 +58,7 @@ def create_group(payload: dict[str, Any], user: CurrentUser, request) -> dict[st
 
 def update_group(group_id: str, payload: dict[str, Any], user: CurrentUser, request) -> dict[str, Any]:
     group = _group(group_id)
-    if group["owner_id"] != user["id"] and user["role"] != "admin":
+    if group["owner_id"] != user["id"]:
         raise HTTPException(status_code=403, detail="Only the group owner can rename a group.")
     result = execute_query(_db().table("groups").update({
         "name": payload["name"].strip(), "description": payload.get("description", "").strip(),
@@ -70,7 +70,7 @@ def update_group(group_id: str, payload: dict[str, Any], user: CurrentUser, requ
 
 def add_member(group_id: str, payload: dict[str, Any], user: CurrentUser, request) -> dict[str, Any]:
     group = _group(group_id)
-    if group["owner_id"] != user["id"] and user["role"] != "admin":
+    if group["owner_id"] != user["id"]:
         raise HTTPException(status_code=403, detail="Only the owner can manage members.")
     profiles = execute_query(_db().table("profiles").select("id,email")
         .eq("email", payload["email"].strip().lower()).limit(1))
@@ -119,7 +119,7 @@ def list_members(group_id: str, user: CurrentUser) -> list[dict[str, Any]]:
 
 def delete_group(group_id: str, user: CurrentUser, request) -> None:
     group = _group(group_id)
-    if group["owner_id"] != user["id"] and user["role"] != "admin":
+    if group["owner_id"] != user["id"]:
         raise HTTPException(status_code=403, detail="Only the owner can delete a group.")
     execute_query(_db().table("groups").delete().eq("id", group_id))
     record_activity(user["id"], "group_deleted", "group", group_id, request)
@@ -175,7 +175,7 @@ def update_group_request(group_id: str, request_id: int, payload: dict[str, Any]
 
 def delete_group_request(group_id: str, request_id: int, user: CurrentUser, request) -> None:
     group = _group(group_id)
-    if group["owner_id"] != user["id"] and user["role"] != "admin":
+    if group["owner_id"] != user["id"]:
         raise HTTPException(status_code=403, detail="Only the owner can delete shared requests.")
     result = execute_query(_db().table("service_requests").delete()
         .eq("id", request_id).eq("group_id", group_id).select("id"))

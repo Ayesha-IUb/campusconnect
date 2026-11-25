@@ -43,6 +43,10 @@ jobs:
         run: python -m pip install -r backend/requirements.txt
       - name: Compile backend modules
         run: python -m compileall -q backend
+      - name: Run backend authorization tests
+        env:
+          PYTHONPATH: backend
+        run: python -m pytest backend/tests -q
       - name: Import FastAPI app and verify routes
         working-directory: backend
         run: |

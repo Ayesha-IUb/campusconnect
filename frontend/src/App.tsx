@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react"
-import type { Category, RequestStatus, Session, Profile, ServiceRequest } from "./types"
+import type { AppPage, Category, RequestStatus, Session, Profile, ServiceRequest } from "./types"
 import AuthForm from "./components/AuthForm"
 import PageHeader from "./components/PageHeader"
 import RequestDetails from "./components/RequestDetails"
@@ -7,6 +7,7 @@ import RequestForm, { type RequestFormValues } from "./components/RequestForm"
 import RequestList from "./components/RequestList"
 import RequestStats from "./components/RequestStats"
 import Sidebar from "./components/Sidebar"
+import FinalWorkspace from "./components/FinalWorkspace"
 import { apiRequest, authRequest, logoutRequest } from "./services/api"
 
 const emptyForm: RequestFormValues = {
@@ -26,6 +27,7 @@ export default function App() {
   })
   const [profile, setProfile] = useState<Profile | null>(null)
   const [authMode, setAuthMode] = useState<"login" | "signup">("login")
+  const [activePage, setActivePage] = useState<AppPage>("requests")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [fullName, setFullName] = useState("")
@@ -257,48 +259,54 @@ export default function App() {
 
   return (
     <div className="app-shell">
-      <Sidebar profile={profile} />
+      <Sidebar profile={profile} activePage={activePage} onNavigate={setActivePage} />
       <main className="main-area">
         <PageHeader profile={profile} onSignOut={signOut} />
-        <RequestStats requests={requests} isStudent={profile.role === "student"} />
-
-        {error && <div className="alert alert-error" role="alert">{error}</div>}
-        {notice && <div className="alert alert-success" role="status">{notice}</div>}
-
-        <div className="workspace-grid">
-          {(canCreate || (profile.role === "staff" && editingId !== null)) && (
-            <RequestForm
-              form={form}
-              editingId={editingId}
+        {activePage === "requests" ? (
+          <>
+            <RequestStats requests={requests} isStudent={profile.role === "student"} />
+            {error && <div className="alert alert-error" role="alert">{error}</div>}
+            {notice && <div className="alert alert-success" role="status">{notice}</div>}
+            <div className="workspace-grid">
+              {(canCreate || (profile.role === "staff" && editingId !== null)) && (
+                <RequestForm
+                  form={form}
+                  editingId={editingId}
+                  isStaff={profile.role === "staff"}
+                  canChangeStatus={!!canChangeStatus}
+                  saving={saving}
+                  onTitleChange={value => setForm(current => ({ ...current, title: value }))}
+                  onDescriptionChange={value => setForm(current => ({ ...current, description: value }))}
+                  onCategoryChange={(value: Category) => setForm(current => ({ ...current, category: value }))}
+                  onStatusChange={(value: RequestStatus) => setForm(current => ({ ...current, status: value }))}
+                  onSubmit={handleSubmit}
+                  onCancel={() => { setEditingId(null); setForm(emptyForm) }}
+                />
+              )}
+              <RequestList
+                requests={requests}
+                selected={selected}
+                isStudent={profile.role === "student"}
+                onSelect={id => void selectRequest(id)}
+              />
+            </div>
+            <RequestDetails
+              selected={selected}
+              canEdit={canEdit}
+              canDelete={canDelete}
               isStaff={profile.role === "staff"}
-              canChangeStatus={!!canChangeStatus}
-              saving={saving}
-              onTitleChange={value => setForm(current => ({ ...current, title: value }))}
-              onDescriptionChange={value => setForm(current => ({ ...current, description: value }))}
-              onCategoryChange={(value: Category) => setForm(current => ({ ...current, category: value }))}
-              onStatusChange={(value: RequestStatus) => setForm(current => ({ ...current, status: value }))}
-              onSubmit={handleSubmit}
-              onCancel={() => { setEditingId(null); setForm(emptyForm) }}
+              onEdit={startEditing}
+              onDelete={() => void handleDelete()}
             />
-          )}
-
-          <RequestList
-            requests={requests}
-            selected={selected}
-            isStudent={profile.role === "student"}
-            onSelect={id => void selectRequest(id)}
+          </>
+        ) : (
+          <FinalWorkspace
+            page={activePage}
+            profile={profile}
+            session={session}
+            onSignOut={signOut}
           />
-        </div>
-
-        <RequestDetails
-          selected={selected}
-          canEdit={canEdit}
-          canDelete={canDelete}
-          isStaff={profile.role === "staff"}
-          onEdit={startEditing}
-          onDelete={() => void handleDelete()}
-        />
-
+        )}
         <footer className="page-footer">CampusConnect · University Service Request Management</footer>
       </main>
     </div>

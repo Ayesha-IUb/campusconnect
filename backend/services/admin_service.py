@@ -3,7 +3,9 @@ import csv
 import io
 from datetime import datetime, timedelta, timezone
 from typing import Any
+
 from fastapi import HTTPException
+
 from database import execute_query, get_database
 from models import CurrentUser
 from services.activity_service import record_activity
@@ -69,8 +71,7 @@ def change_role(target_id: str, role: str, actor: CurrentUser, request) -> dict[
     if role not in {"student", "staff", "admin"}:
         raise HTTPException(status_code=422, detail="Invalid role.")
     db = get_database()
-    target = execute_query(db.table("profiles").select("id,role")
-        .eq("id", target_id).limit(1))
+    target = execute_query(db.table("profiles").select("id,role").eq("id", target_id).limit(1))
     if not target.data:
         raise HTTPException(status_code=404, detail="User not found.")
     if target.data[0]["role"] == "admin":
@@ -87,8 +88,7 @@ def set_banned(target_id: str, banned: bool, reason: str | None,
     if target_id == actor["id"]:
         raise HTTPException(status_code=403, detail="An administrator cannot ban their own account.")
     db = get_database()
-    target = execute_query(db.table("profiles").select("id,role")
-        .eq("id", target_id).limit(1))
+    target = execute_query(db.table("profiles").select("id,role").eq("id", target_id).limit(1))
     if not target.data:
         raise HTTPException(status_code=404, detail="User not found.")
     if target.data[0]["role"] == "admin":
@@ -112,7 +112,8 @@ def set_banned(target_id: str, banned: bool, reason: str | None,
     return result.data[0]
 
 
-def bulk_ban(user_ids: list[str], banned: bool, reason: str, actor: CurrentUser, request) -> dict[str, int]:
+def bulk_ban(user_ids: list[str], banned: bool, reason: str,
+             actor: CurrentUser, request) -> dict[str, int]:
     changed = 0
     for user_id in dict.fromkeys(user_ids):
         if user_id == actor["id"]:
@@ -126,13 +127,55 @@ def bulk_ban(user_ids: list[str], banned: bool, reason: str, actor: CurrentUser,
     return {"updated": changed}
 
 
-def list_activity(action: str | None, actor_id: str | None, page: int,
-                  page_size: int) -> dict[str, Any]:
+def list_requests(search: str | None, status: str | None, page: int, page_size: int) -> dict[str, Any]:
+    query = get_database().table("service_requests").select("*", count="exact").order("created_at", desc=True)
+    if status:
+        query = query.eq("status", status)
+    if search:
+        term = "".join(ch for ch in search if ch.isalnum() or ch in " -_")[:80].strip()
+        if term:
+            query = query.ilike("title", f"%{term}%")
+    result = execute_query(query.range((page - 1) * page_size, page * page_size - 1))
+    return {"items": result.data or [], "total": result.count or 0}
+
+
+def list_groups(search: str | None, page: int, page_size: int) -> dict[str, Any]:
+    query = get_database().table("groups").select("*", count="exact").order("created_at", desc=True)
+    if search:
+        term = "".join(ch for ch in search if ch.isalnum() or ch in " -_")[:80].strip()
+        if term:
+            query = query.ilike("name", f"%{term}%")
+    result = execute_query(query.range((page - 1) * page_size, page * page_size - 1))
+    return {"items": result.data or [], "total": result.count or 0}
+
+
+def bulk_delete_requests(ids: list[int], actor: CurrentUser, request) -> dict[str, int]:
+    result = execute_query(get_database().table("service_requests").delete().in_("id", list(set(ids))).select("id"))
+    count = len(result.data or [])
+    record_activity(actor["id"], "admin_bulk_requests_deleted", "request", request=request,
+                    details={"deleted": count})
+    return {"deleted": count}
+
+
+def bulk_delete_groups(ids: list[str], actor: CurrentUser, request) -> dict[str, int]:
+    result = execute_query(get_database().table("groups").delete().in_("id", list(set(ids))).select("id"))
+    count = len(result.data or [])
+    record_activity(actor["id"], "admin_bulk_groups_deleted", "group", request=request,
+                    details={"deleted": count})
+    return {"deleted": count}
+
+
+def list_activity(action: str | None, actor_id: str | None, search: str | None,
+                  page: int, page_size: int) -> dict[str, Any]:
     query = get_database().table("activity_logs").select("*", count="exact").order("created_at", desc=True)
     if action:
         query = query.eq("action", action)
     if actor_id:
         query = query.eq("actor_id", actor_id)
+    if search:
+        term = "".join(ch for ch in search if ch.isalnum() or ch in " -_")[:80].strip()
+        if term:
+            query = query.ilike("action", f"%{term}%")
     result = execute_query(query.range((page - 1) * page_size, page * page_size - 1))
     return {"items": result.data or [], "total": result.count or 0, "page": page, "page_size": page_size}
 
@@ -174,30 +217,49 @@ def delete_group(group_id: str, actor: CurrentUser, request) -> None:
     record_activity(actor["id"], "admin_group_deleted", "group", group_id, request)
 
 
-def export_csv(kind: str) -> str:
-    tables = {
+def _escape_csv_cell(value: Any) -> str:
+    cell = "" if value is None else str(value)
+    if cell.startswith(("=", "+", "-", "@")):
+        return "'" + cell
+    return cell
+
+
+def export_csv(kind: str, filters: dict[str, str | None] | None = None) -> str:
+    filters = filters or {}
+    allowed = {
         "users": ("profiles", "id,email,full_name,role,is_banned,ban_reason,created_at"),
         "requests": ("service_requests", "*"),
         "groups": ("groups", "*"),
         "activity": ("activity_logs", "*"),
     }
-    if kind not in tables:
+    if kind not in allowed:
         raise HTTPException(status_code=404, detail="Unknown export type.")
-    table, columns = tables[kind]
-    result = execute_query(get_database().table(table).select(columns).limit(10000))
+    table, columns = allowed[kind]
+    query = get_database().table(table).select(columns).limit(10000)
+    if kind == "users":
+        if filters.get("role"):
+            query = query.eq("role", filters["role"])
+        if filters.get("banned") in {"true", "false"}:
+            query = query.eq("is_banned", filters["banned"] == "true")
+        if filters.get("search"):
+            term = "".join(ch for ch in filters["search"] if ch.isalnum() or ch in "@._- ")[:80].strip()
+            if term:
+                query = query.or_(f"email.ilike.%{term}%,full_name.ilike.%{term}%")
+    elif kind == "requests":
+        if filters.get("status"):
+            query = query.eq("status", filters["status"])
+        if filters.get("search"):
+            query = query.ilike("title", f"%{filters['search'][:80]}%")
+    elif kind == "activity" and filters.get("action"):
+        query = query.eq("action", filters["action"])
+    result = execute_query(query)
     rows = result.data or []
+    fields = list(rows[0].keys()) if rows else (columns.split(",") if columns != "*" else ["id"])
     buffer = io.StringIO()
-    fields = list(rows[0].keys()) if rows else columns.split(",") if columns != "*" else ["id"]
     writer = csv.DictWriter(buffer, fieldnames=fields, extrasaction="ignore")
     writer.writeheader()
     for row in rows:
-        safe = {}
-        for key, value in row.items():
-            cell = "" if value is None else str(value)
-            if cell.startswith(("=", "+", "-", "@")):
-                cell = "'" + cell
-            safe[key] = cell
-        writer.writerow(safe)
+        writer.writerow({key: _escape_csv_cell(value) for key, value in row.items()})
     return "\ufeff" + buffer.getvalue()
 
 

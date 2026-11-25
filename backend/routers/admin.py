@@ -1,10 +1,10 @@
-"""Admin-only dashboard, moderation, activity and security endpoints."""
+"""Admin-only dashboard, moderation, audit and security endpoints."""
 from fastapi import APIRouter, Depends, Query, Request, Response
 
 from models import CurrentUser
 from rbac import require_admin
-from schemas import BanInput, BulkUserAction, RoleChange
-from services import admin_service, auth_service
+from schemas import BanInput, BulkUserAction, BulkRequestDeleteInput, BulkDeleteInput, RoleChange
+from services import admin_service
 
 router = APIRouter(prefix="/api/admin", tags=["Admin"])
 
@@ -57,11 +57,38 @@ def bulk_unban(payload: BulkUserAction, request: Request,
     return admin_service.bulk_ban(payload.user_ids, False, "", admin, request)
 
 
+@router.get("/requests")
+def requests(search: str | None = None, status: str | None = None,
+             page: int = Query(1, ge=1), page_size: int = Query(100, ge=1, le=100),
+             _: CurrentUser = Depends(require_admin)):
+    return admin_service.list_requests(search, status, page, page_size)["items"]
+
+
+@router.get("/groups")
+def groups(search: str | None = None, page: int = Query(1, ge=1),
+           page_size: int = Query(100, ge=1, le=100),
+           _: CurrentUser = Depends(require_admin)):
+    return admin_service.list_groups(search, page, page_size)["items"]
+
+
+@router.post("/requests/bulk-delete")
+def bulk_delete_requests(payload: BulkRequestDeleteInput, request: Request,
+                         admin: CurrentUser = Depends(require_admin)):
+    return admin_service.bulk_delete_requests(payload.ids, admin, request)
+
+
+@router.post("/groups/bulk-delete")
+def bulk_delete_groups(payload: BulkDeleteInput, request: Request,
+                       admin: CurrentUser = Depends(require_admin)):
+    return admin_service.bulk_delete_groups(payload.ids, admin, request)
+
+
 @router.get("/activity")
 def activity(action: str | None = None, actor_id: str | None = None,
-             page: int = Query(1, ge=1), page_size: int = Query(50, ge=1, le=100),
+             search: str | None = None, page: int = Query(1, ge=1),
+             page_size: int = Query(50, ge=1, le=100),
              _: CurrentUser = Depends(require_admin)):
-    return admin_service.list_activity(action, actor_id, page, page_size)
+    return admin_service.list_activity(action, actor_id, search, page, page_size)
 
 
 @router.get("/security")
@@ -73,13 +100,14 @@ def security(event_type: str | None = None, ip_address: str | None = None,
 
 
 @router.get("/export/{kind}")
-def export(kind: str, _: CurrentUser = Depends(require_admin)):
-    csv_text = admin_service.export_csv(kind)
-    return Response(
-        content=csv_text,
-        media_type="text/csv; charset=utf-8",
-        headers={"Content-Disposition": f'attachment; filename="campusconnect-{kind}.csv"'},
-    )
+def export(kind: str, search: str | None = None, role: str | None = None,
+           banned: str | None = None, status: str | None = None, action: str | None = None,
+           _: CurrentUser = Depends(require_admin)):
+    csv_text = admin_service.export_csv(kind, {
+        "search": search, "role": role, "banned": banned, "status": status, "action": action,
+    })
+    return Response(content=csv_text, media_type="text/csv; charset=utf-8",
+                    headers={"Content-Disposition": f'attachment; filename="campusconnect-{kind}.csv"'})
 
 
 @router.delete("/requests/{request_id}")
@@ -97,7 +125,7 @@ def delete_group(group_id: str, request: Request,
 
 
 @router.delete("/activity")
-def purge_activity(older_than_days: int = Query(90, ge=30, le=3650),
-                   request: Request = None, admin: CurrentUser = Depends(require_admin)):
+def purge_activity(request: Request, older_than_days: int = Query(90, ge=30, le=3650),
+                   admin: CurrentUser = Depends(require_admin)):
     deleted = admin_service.purge_activity(older_than_days, admin, request)
     return {"deleted": deleted}

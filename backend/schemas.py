@@ -88,3 +88,6 @@ class BulkUserAction(BaseModel):
 
 class BulkDeleteInput(BaseModel):
     ids: list[str] = Field(min_length=1, max_length=50)
+
+class BulkRequestDeleteInput(BaseModel):
+    ids: list[int] = Field(min_length=1, max_length=50)
