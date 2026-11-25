@@ -1,79 +1,107 @@
-import type { Session } from "../types"
+import type { Session } from "../types";
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-// Authentication API
-export async function authRequest(
-  path: string,
-  body: object
-): Promise<any> {
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-    throw new Error("Authentication is not configured.")
-  }
-
-  const response = await fetch(`${SUPABASE_URL}/auth/v1/${path}`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      apikey: SUPABASE_ANON_KEY,
-    },
-    body: JSON.stringify(body),
-  })
-
-  const data = await response.json()
-
+async function readResponse(response: Response): Promise<any> {
+  const data = await response.json().catch(() => null);
   if (!response.ok) {
-    throw new Error(
-      data.msg ||
-      data.message ||
-      data.error_description ||
-      data.error ||
-      "Authentication failed."
-    )
+    const message = data?.detail || data?.msg || data?.message || data?.error_description || `Request failed (${response.status})`;
+    throw new Error(String(message));
   }
-
-  return data
+  return data;
 }
 
-// Main backend API
+// Signup/login now go through FastAPI; refresh tokens stay in an HttpOnly cookie.
+export async function authRequest(path: string, body: object): Promise<any> {
+  if (path === "resend") {
+    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) throw new Error("Email confirmation is not configured.");
+    const response = await fetch(`${SUPABASE_URL}/auth/v1/resend`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", apikey: SUPABASE_ANON_KEY },
+      body: JSON.stringify(body),
+    });
+    return readResponse(response);
+  }
+
+  const endpoint = path === "signup" ? "/api/auth/signup" : "/api/auth/login";
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(body),
+  });
+  return readResponse(response);
+}
+
+function storeSession(session: Session): void {
+  try {
+    localStorage.setItem("campusconnect_session", JSON.stringify(session));
+  } catch {
+    // The current request can still complete if browser storage is unavailable.
+  }
+}
+
 export async function apiRequest<T>(
   endpoint: string,
   session: Session,
-  options: RequestInit = {}
+  options: RequestInit = {},
 ): Promise<T> {
-  const response = await fetch(endpoint, {
+  const send = (token: string) => fetch(endpoint, {
     ...options,
+    credentials: "include",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${session.access_token}`,
       ...options.headers,
+      Authorization: `Bearer ${token}`,
     },
-  })
+  });
 
-  const data = await response.json().catch(() => null)
+  let response = await send(session.access_token);
 
-  if (!response.ok) {
-    const message =
-      typeof data === "object" && data && "detail" in data
-        ? String(data.detail)
-        : `Request failed (${response.status})`
-
-    throw new Error(message)
+  if (response.status === 401 && !endpoint.startsWith("/api/auth/refresh")) {
+    const refreshResponse = await fetch("/api/auth/refresh", {
+      method: "POST",
+      credentials: "include",
+    });
+    if (!refreshResponse.ok) {
+      try { localStorage.removeItem("campusconnect_session"); } catch { /* ignore */ }
+      throw new Error("Your session expired. Please sign in again.");
+    }
+    const refreshed = await readResponse(refreshResponse);
+    session.access_token = refreshed.access_token;
+    session.session_id = refreshed.session_id;
+    storeSession(session);
+    response = await send(session.access_token);
   }
 
-  return data as T
+  return readResponse(response) as Promise<T>;
 }
 
-// Logout API
-export function logoutRequest(session: Session): void {
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return
+export async function logoutRequest(_session?: Session): Promise<void> {
+  try {
+    await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
+  } finally {
+    try { localStorage.removeItem("campusconnect_session"); } catch { /* ignore */ }
+  }
+}
 
-  void fetch(`${SUPABASE_URL}/auth/v1/logout`, {
-    method: "POST",
-    headers: {
-      apikey: SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${session.access_token}`,
-    },
-  })
+export async function downloadCsv(session: Session, kind: string, filters: Record<string, string | undefined> = {}): Promise<void> {
+  const query = new URLSearchParams(Object.entries(filters).filter(([, value]) => Boolean(value)) as [string, string][]);
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  const response = await fetch(`/api/admin/export/${encodeURIComponent(kind)}${suffix}`, {
+    credentials: "include",
+    headers: { Authorization: `Bearer ${session.access_token}` },
+  });
+  const blob = await response.blob();
+  if (!response.ok) {
+    const text = await blob.text().catch(() => "");
+    throw new Error(text || `Export failed (${response.status})`);
+  }
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `campusconnect-${kind}.csv`;
+  link.click();
+  URL.revokeObjectURL(url);
 }

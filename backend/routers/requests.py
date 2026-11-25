@@ -1,8 +1,6 @@
 """REST endpoints for service request CRUD operations."""
-
 from typing import Any
-
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Request, status
 
 from dependencies import get_current_user
 from models import CurrentUser
@@ -14,10 +12,11 @@ router = APIRouter(prefix="/api/requests", tags=["Service Requests"])
 
 @router.post("", status_code=status.HTTP_201_CREATED)
 def create_request(
-    request: RequestCreate,
+    request_data: RequestCreate,
+    request: Request,
     current_user: CurrentUser = Depends(get_current_user),
 ) -> dict[str, Any]:
-    return request_service.create_request(request, current_user)
+    return request_service.create_request(request_data, current_user, request)
 
 
 @router.get("")
@@ -38,15 +37,17 @@ def get_request(
 @router.put("/{request_id}")
 def update_request(
     request_id: int,
-    request: RequestUpdate,
+    request_data: RequestUpdate,
+    request: Request,
     current_user: CurrentUser = Depends(get_current_user),
 ) -> dict[str, Any]:
-    return request_service.update_request(request_id, request, current_user)
+    return request_service.update_request(request_id, request_data, current_user, request)
 
 
 @router.delete("/{request_id}")
 def delete_request(
     request_id: int,
+    request: Request,
     current_user: CurrentUser = Depends(get_current_user),
 ) -> dict[str, Any]:
-    return request_service.delete_request(request_id, current_user)
+    return request_service.delete_request(request_id, current_user, request)

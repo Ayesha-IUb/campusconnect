@@ -1,108 +1,92 @@
 # Software Requirements Specification (SRS)
 ## CampusConnect: University Service Request Management System
 
-**Version:** 1.1 | **Status:** MVP planning document
+**Version:** 2.0 · **Status:** Final project specification
 
-## 1. Purpose
-This document defines CampusConnect's functional and non-functional requirements and provides a basis for implementation and testing.
+## 1. Purpose and scope
+This document specifies the functional and security requirements for CampusConnect, a React/TypeScript and FastAPI service-request platform backed by Supabase PostgreSQL/Auth and deployed through Vercel.
 
-## 2. Scope
-CampusConnect is a web application for students to submit and track university service requests and for staff to process them. The MVP covers creating, listing, retrieving, and updating request status. Authentication, role-based access, and administrator management are planned for Beta.
+## 2. User classes
+- Student
+- Staff
+- Administrator
 
-**Included in MVP**
-- React + TypeScript user interface.
-- Python + FastAPI REST API.
-- Persistent storage for requests.
-- Input validation and clear API responses.
-- Tests for the main request workflow.
+## 3. Functional requirements
 
-**Not included in MVP**
-- University single sign-on.
-- Email/SMS notifications.
-- Native mobile apps.
-- Production analytics or university-system integrations.
+### Authentication and sessions
+- AUTH-01: The system shall support email/password signup and login.
+- AUTH-02: The system shall issue a signed access JWT through Supabase Auth and verify it on protected API routes.
+- AUTH-03: The backend shall set an HttpOnly refresh cookie and rotate refresh tokens.
+- AUTH-04: Logout and explicit session revocation shall invalidate stored session records.
+- AUTH-05: Users shall list and revoke their own sessions.
+- AUTH-06: Users shall update their full name.
+- AUTH-07: Users shall change their password only after the current password is verified.
+- AUTH-08: Five failed attempts for an email/IP pair within the configured time window shall trigger a temporary lockout.
 
-## 3. User classes
-- **Student:** submits requests and views them. Ownership checks are required once authentication is implemented.
-- **Staff:** reviews and processes requests; staff permissions are Beta scope.
-- **Administrator:** manages users, service categories, and permissions in Beta.
+### Service requests
+- REQ-01: Students and administrators shall create requests with title, description and category.
+- REQ-02: Students shall list and retrieve only their own requests.
+- REQ-03: Staff and administrators shall view all requests.
+- REQ-04: Students shall edit/delete only their own Pending requests.
+- REQ-05: Staff shall update status only.
+- REQ-06: Administrators shall manage all requests.
+- REQ-07: Invalid fields shall return validation errors; unknown records shall return not-found responses.
 
-## 4. Operating environment
-- OS: Windows, macOS, or Linux for development.
-- Frontend: modern browser, React + TypeScript, Vite.
-- Backend: Python 3.11+ and FastAPI, served by Uvicorn.
-- Storage: SQLite is suitable for local MVP development; production choice is TBD.
-- API: JSON over HTTP using REST-style endpoints.
+### RBAC and groups
+- RBAC-01: Roles shall be read from the database and enforced on the backend.
+- RBAC-02: Shared permission rules shall be implemented in a reusable RBAC module and group service.
+- GROUP-01: A user shall create a group and become its owner.
+- GROUP-02: The owner shall add/remove registered members.
+- GROUP-03: The owner shall grant create, edit and assign permissions independently.
+- GROUP-04: Members shall only perform shared-request actions allowed by their permissions.
+- GROUP-05: Only the owner shall rename/delete a group, manage members and delete shared requests.
+- GROUP-06: The owner/admin may view the member list; members may view groups they belong to.
 
-## 5. Functional requirements
-- SRS-FR-01: Create a service request from valid input.
-- SRS-FR-02: Require title, description, and category.
-- SRS-FR-03: Generate a unique ID for each saved request.
-- SRS-FR-04: Set initial status to `Submitted`.
-- SRS-FR-05: Return a list of requests.
-- SRS-FR-06: Return request details by ID.
-- SRS-FR-07: Update request status when the requested status is valid.
-- SRS-FR-08: Return not-found for an unknown request ID.
-- SRS-FR-09: Return a clear client error for invalid data.
-- SRS-FR-10: Beta protected operations require authentication.
-- SRS-FR-11: Beta staff/admin operations enforce role permissions.
+### Administration and monitoring
+- ADM-01: Administrators shall view overview statistics.
+- ADM-02: Administrators shall search, filter, paginate and inspect users.
+- ADM-03: Administrators shall change non-admin roles, ban/unban non-admin users and provide a ban reason.
+- ADM-04: An administrator shall not change their own role, ban themselves or ban/change another admin.
+- ADM-05: Banning shall revoke active sessions and cause subsequent protected requests to be rejected.
+- ADM-06: Administrators shall moderate requests and groups, including bulk deletion.
+- ADM-07: The system shall record activity/security events with timestamp, actor where known, IP and browser user agent where available.
+- ADM-08: Administrators shall filter activity/security logs and export users, requests, groups and activity as CSV.
+- ADM-09: Administrators shall purge old activity using an allowed retention period.
 
-## 6. External interface requirements
+## 4. External interfaces
+
+### REST API
+Authentication: /api/auth/*; personal profile: /api/me; requests: /api/requests; groups: /api/groups; administration: /api/admin; API docs: /api/docs; health: /api/health.
+
 ### User interface
-- Request form with title, description, and category.
-- Clear validation messages.
-- Request list showing ID, title, category, creation time, and status.
-- Status labels such as `Submitted`, `In Progress`, and `Resolved`.
+- Sign-in/sign-up form.
+- Request management workspace.
+- Profile and active sessions screen.
+- Groups and shared requests workspace.
+- Admin tabs for users, content, activity and security.
 
-### Planned API
-| Method | Endpoint | Purpose |
-|---|---|---|
-| GET | `/api/health` | Check backend availability |
-| POST | `/api/requests` | Create a request |
-| GET | `/api/requests` | List requests |
-| GET | `/api/requests/{request_id}` | Retrieve a request |
-| PATCH | `/api/requests/{request_id}/status` | Update status |
+## 5. Data requirements
+- Profile records use Supabase Auth user UUIDs and database role/ban metadata.
+- Service requests store owner, optional group, optional assignee, category, status and timestamps.
+- Groups store a single owner; group_members stores independent permission flags.
+- app_sessions stores only hashed access/refresh tokens and device metadata.
+- activity_logs and security_events store audit/security metadata; never store passwords or bearer tokens.
 
-The request endpoints are planned until implemented and tested. The health endpoint is a separate backend check.
+## 6. Security and non-functional requirements
+- Protected requests require a valid JWT, active non-revoked session and unbanned user.
+- Supabase privileged credentials and password pepper are backend-only.
+- Refresh cookies shall be HttpOnly, SameSite=Lax and Secure on HTTPS.
+- CORS shall permit only configured frontend origins.
+- Input fields shall be validated by Pydantic.
+- Database errors shall not return stack traces to clients.
+- Application data shall persist in Supabase PostgreSQL, not ephemeral serverless disk.
 
-### Data requirements
-A request record should include `id`, `title`, `description`, `category`, `status`, `created_at`, and optionally `updated_at`.
-
-## 7. Non-functional requirements
-- Performance: common local API requests should respond promptly.
-- Reliability: return meaningful HTTP status codes and errors.
-- Security: never commit secrets; protect privileged routes when auth is added.
-- Usability: the main workflow should be understandable without training.
-- Maintainability: organize routes, models, and components.
-- Testability: test successful and failed API requests.
-
-## 8. Use cases
-### UC-1: Submit request
-1. Student opens the form and enters details.
-2. Frontend sends data to `POST /api/requests`.
-3. Backend validates and stores the request.
-4. System returns the saved request or a validation error.
-
-### UC-2: View requests
-1. User opens the request list.
-2. Frontend calls `GET /api/requests`.
-3. Backend returns available records.
-4. Frontend displays requests and statuses.
-
-### UC-3: Update status
-1. Staff selects a request and a new status.
-2. Frontend sends the update.
-3. Backend validates status and authorization.
-4. Backend saves the change and returns the updated request.
-5. Frontend displays the new status.
-
-Proper identity and role checks are required before real-world deployment.
-
-## 9. Acceptance criteria
-- Valid input creates a saved record with a unique ID and initial status.
-- Missing required fields return a validation error.
-- Listing returns saved records.
-- Unknown IDs return not-found.
-- A valid status update persists.
-- Automated tests cover success and failure cases.
-- Beta protected routes reject unauthorized operations.
+## 7. Acceptance criteria
+- Authentication succeeds for a valid account and rejects invalid/expired access tokens.
+- Refresh rotates the refresh token and logout/session revoke blocks further protected requests after session validation.
+- Students cannot read/update/delete another student's request.
+- Staff cannot create or delete requests and can only change status.
+- Group members with no create permission cannot create shared requests; edit/assign operations require the corresponding flag.
+- Non-admin users cannot access admin endpoints; admin safety restrictions are enforced.
+- Ban, activity, security and CSV functions return expected data on hosted Supabase.
+- Frontend build, backend import checks and RBAC unit tests pass.

@@ -1,83 +1,109 @@
-# CampusConnect Authentication and RBAC Setup
+# CampusConnect Authentication, Database and Deployment Setup
 
-## 1. Apply the database migration
+## 1. Apply database migrations
 
-1. Open the Supabase project used by CampusConnect.
-2. Open **SQL Editor** and create a new query.
-3. Copy and run the complete contents of `backend/migrations/001_auth_rbac.sql`.
-4. Confirm that the `profiles` table exists and that `service_requests` now has a `user_id` column.
+Use the Supabase SQL Editor in this order:
 
-The migration creates a profile with the `student` role automatically for every new Supabase Auth user. Existing service requests keep a NULL `user_id`; they are not automatically assigned to a student.
+1. Run backend/migrations/001_auth_rbac.sql if it has not already been applied.
+2. Run backend/migrations/002_final_features.sql after migration 001.
 
-## 2. Configure Supabase Auth
+Migration 002 adds:
+- is_banned and ban metadata to profiles.
+- Groups, member permissions and group/assignee fields on service requests.
+- Hashed refresh/access token records in app_sessions.
+- Activity logs, security events and failed-login records.
 
-In Supabase **Authentication → URL Configuration**, set the Site URL to:
+The application uses the backend Supabase service client for protected data access. These new tables have RLS enabled and no browser-facing write policies.
 
-`https://campusconnect-two-ivory.vercel.app`
+## 2. Supabase Auth settings
 
-Add the deployed site URL to the allowed redirect URLs if email confirmation is enabled.
+In Supabase Authentication settings:
+- Keep email/password authentication enabled.
+- Use the deployed site URL https://campusconnect-two-ivory.vercel.app for the Site URL and allowed redirect URLs.
+- Set the JWT/access-token lifetime to 900 seconds or less to satisfy the course requirement.
+- Configure refresh/session lifetime consistently with the application's seven-day refresh-cookie/session lifetime.
 
-For a simple course MVP, email/password sign-in is used. If email confirmation is enabled, users must confirm their email before they can sign in.
+Supabase Auth performs salted password hashing. CampusConnect adds a server-side HMAC pepper pre-hash before sending the password to Supabase Auth. The pepper must be stable and must never be exposed to the browser or repository.
 
-## 3. Configure Vercel environment variables
+## 3. Vercel environment variables
 
-Keep the existing backend variables:
-- `SUPABASE_URL`
-- `SUPABASE_SECRET_KEY` (backend only; never expose this in frontend code)
+Set the following for the backend deployment:
 
-Add these frontend variables to the Vercel project for Production and Preview:
-- `VITE_SUPABASE_URL` = the same Supabase project URL
-- `VITE_SUPABASE_ANON_KEY` = the Supabase publishable/anon key
+| Variable | Purpose |
+|---|---|
+| SUPABASE_URL | Supabase project URL |
+| SUPABASE_SECRET_KEY | Backend-only privileged key; never expose it to Vite |
+| SUPABASE_ANON_KEY | Public/anon key for backend Supabase Auth REST calls |
+| PASSWORD_PEPPER | Stable high-entropy secret used by the backend password pre-hash |
+| REFRESH_TOKEN_DAYS | Optional; defaults to 7 |
+| FRONTEND_ORIGINS | Comma-separated allowed frontend origins |
 
-The publishable/anon key is intended for browser use. Never put the secret/service-role key in a `VITE_` variable.
+For the frontend, set only:
+- VITE_SUPABASE_URL
+- VITE_SUPABASE_ANON_KEY
 
-Redeploy the Vercel project after changing environment variables.
+The backend can fall back to the existing VITE_SUPABASE_ANON_KEY value if SUPABASE_ANON_KEY is not set, but a server-side SUPABASE_ANON_KEY is clearer. Never put the service-role/secret key in a VITE_ variable.
 
-## 4. Assign trusted staff and admin roles
+After changing Vercel variables, redeploy the application.
 
-All self-registered users become students. A user cannot choose their role during signup.
+## 4. Existing account compatibility
 
-After a trusted staff/admin user registers, use Supabase SQL Editor to promote that account by email. Replace the example email:
+Older accounts were originally registered before the server-side pepper was added. The login flow first verifies the peppered form; if that fails, it tries the old raw password once and upgrades the stored Supabase Auth password to the peppered form. This compatibility path is intended to avoid forcing all existing demo accounts to be recreated.
 
-```sql
-update public.profiles
-set role = 'admin'
-where email = 'admin@example.edu';
+After deploying this authentication flow, users should sign in again because the application now requires an active app_sessions record for each access token.
 
-update public.profiles
-set role = 'staff'
-where email = 'staff@example.edu';
-```
+## 5. Assign admin and staff roles
 
-Only a trusted project/database administrator should run these statements. Never add a public role-selection dropdown to signup.
+All new self-registrations receive the Student role. A public role selector is intentionally not provided.
 
-## 5. Role permissions
+After trusted test accounts register and confirm their email, promote selected accounts using the SQL Editor. Replace the example email with the actual demo email:
+
+    update public.profiles set role = 'admin'
+    where email = 'admin-one@example.edu';
+
+    update public.profiles set role = 'admin'
+    where email = 'admin-two@example.edu';
+
+    update public.profiles set role = 'staff'
+    where email = 'staff@example.edu';
+
+Do not make a student account an admin merely for convenience. Use only test accounts.
+
+## 6. Role and group permissions
 
 | Action | Student | Staff | Admin |
 |---|---|---|---|
 | Sign in / sign out | Yes | Yes | Yes |
-| Create request | Yes | No | Yes |
+| Create request | Own | No | Any |
 | View request list | Own requests | All requests | All requests |
-| View one request | Own requests | All requests | All requests |
 | Edit request details | Own pending requests | No | All requests |
 | Change request status | No | Yes | Yes |
-| Delete request | Own pending requests | No | Any request |
+| Delete request | Own pending requests | No | Any |
+| Administer users/groups/logs | No | No | Yes |
 
-The backend verifies Supabase access tokens and checks the role in the database. Frontend button visibility is only a usability feature; backend checks are the actual permission enforcement.
+For groups, the group owner controls membership and grants can_create_requests, can_edit_requests and can_assign_requests permissions. The owner alone can rename/delete the group, manage members and delete shared requests. Backend checks are authoritative; hiding a UI control is not a security boundary.
 
-## 6. Test checklist
+## 7. Security behavior
 
-1. Register a new account. It should receive the Student role.
-2. Sign in and create a request.
-3. Sign out, register/sign in as a second student, and confirm the first student's request is not visible.
-4. Promote a test account to Staff using the SQL above. Sign in as Staff and verify that all requests are visible and status can be changed.
-5. Promote a trusted test account to Admin. Verify admin CRUD.
-6. Call `GET /api/requests` in Swagger without a bearer token. It should return 401.
-7. Try a forbidden action. The API should return 403.
+- Access JWT is verified on every protected API request.
+- The backend also checks the current profile role, ban status and active-session token hash.
+- Refresh tokens are placed in an HttpOnly cookie and only their SHA-256 hashes are stored in the database.
+- Refresh rotates the Supabase token pair and updates the stored hashes.
+- Logout/session revoke invalidates the server-side session record.
+- A banned user is rejected on the next protected request; banning also revokes the user's active sessions.
+- Five failed logins for an email/IP pair within 15 minutes trigger a lockout response.
+- CORS is limited to configured frontend origins. Security response headers are applied by FastAPI.
 
-## Security notes
+## 8. Live verification checklist
 
-- Never commit Supabase secrets or place them in frontend variables.
-- The backend uses the privileged Supabase secret key, so the API's JWT and role checks are critical. Do not expose this backend to real student data without a fuller security review.
-- Existing requests with NULL `user_id` are legacy records. Students cannot see or claim them; staff/admin can still review them.
-- Access tokens are held in browser localStorage in this MVP. For a production system, prefer a hardened session strategy (for example, secure HttpOnly cookies), add rate limiting and audit logging, and review token refresh/expiry handling.
+Use only the deployed Vercel URL; localhost screenshots do not satisfy the course requirement.
+
+1. Check /api/health and /api/docs.
+2. Sign in, reload and confirm the session restores.
+3. Wait for/force an access token expiry in a test account and confirm the refresh-cookie flow.
+4. Sign out and confirm the refresh session is revoked.
+5. Verify student ownership restrictions and staff status-only restrictions.
+6. Create a group with different create/edit/assign permissions; verify each member's denied and allowed actions.
+7. Verify admin user search, role changes, ban/unban, session revoke, activity, security and CSV exports.
+
+Do not publish secrets, passwords, or real personal information in GitHub.

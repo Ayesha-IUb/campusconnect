@@ -1,141 +1,104 @@
 # Technical Design Document (TDD)
 ## CampusConnect: University Service Request Management System
 
-**Version:** 1.1 | **Status:** Proposed implementation design
+**Version:** 2.0 · **Status:** Final technical design
 
 ## 1. Architecture
-CampusConnect uses a frontend/backend architecture. React + TypeScript presents forms and request lists. FastAPI exposes JSON REST endpoints, validates input, and applies application rules. A database stores requests and, in Beta, user and role information.
+CampusConnect uses a React/TypeScript frontend, FastAPI REST backend and Supabase Auth/PostgreSQL database. The frontend sends same-origin /api requests to Vercel's FastAPI service. The backend separates HTTP routing, application rules and persistence for service-request and group resources.
 
-## 2. Tech stack
-| Layer | Technology | Purpose |
-|---|---|---|
-| Frontend | React | Reusable UI components |
-| Frontend language | TypeScript | Static types for frontend code |
-| Frontend tooling | Vite | Development server and build tooling |
-| Backend language | Python 3.11+ | Backend logic |
-| Backend framework | FastAPI | REST endpoints and input validation |
-| ASGI server | Uvicorn | Runs FastAPI |
-| Database | SQLite for local MVP; production choice TBD | Persistent request storage |
-| API documentation | OpenAPI / Swagger UI via FastAPI | Inspect and test endpoints |
-| Version control | Git and GitHub | History, issues, branches, pull requests |
-| Testing | pytest and FastAPI TestClient (planned) | Automated backend tests |
-| Deployment | Vercel may host frontend; backend host TBD | Publish after local MVP works |
+## 2. Technology stack
+| Layer | Technology |
+|---|---|
+| Frontend | React, TypeScript, Vite |
+| Backend | Python 3.11+, FastAPI |
+| Authentication | Supabase Auth, signed JWT access token, refresh-token cookie |
+| Database | Supabase PostgreSQL |
+| Persistence | Supabase Python client |
+| Validation | Pydantic |
+| API documentation | FastAPI OpenAPI/Swagger |
+| Tests | pytest and GitHub Actions |
+| Hosting | Vercel |
 
-The repository has a Vite-based React/TypeScript frontend and FastAPI backend. Database integration, tests, and deployment must be verified separately before being described as complete.
+## 3. Project layout
+    campusconnect/
+    ├── backend/
+    │   ├── routers/          # HTTP endpoints
+    │   ├── services/         # use cases and business rules
+    │   ├── repositories/     # persistence for request/group resources
+    │   ├── migrations/       # Supabase SQL schema changes
+    │   ├── tests/            # RBAC unit tests
+    │   ├── database.py
+    │   ├── dependencies.py
+    │   ├── rbac.py
+    │   ├── models.py
+    │   ├── schemas.py
+    │   └── main.py
+    ├── frontend/
+    │   └── src/
+    │       ├── components/
+    │       ├── services/
+    │       ├── types/
+    │       ├── App.tsx
+    │       └── index.css
+    ├── docs/
+    ├── .github/workflows/ci.yml
+    └── vercel.json
 
-## 3. Project structure
-Proposed structure as features are implemented:
+## 4. Layer responsibilities
+- Router: receives HTTP input, injects the authenticated user and converts service results to HTTP responses.
+- Service: enforces business rules, ownership and group/admin permissions.
+- Repository: performs Supabase reads/writes for request and group resources.
+- Database: constructs the Supabase client from backend-only environment variables and wraps database execution.
+- Dependencies: verifies JWT claims, profile role/ban state and active session hash.
+- Frontend service: owns fetch calls, refresh retry, logout and CSV download.
 
-```text
-campusconnect/
-├── docs/
-│   ├── PRD.md
-│   ├── SRS.md
-│   └── TDD.md
-├── frontend/
-│   ├── src/
-│   │   ├── components/
-│   │   ├── pages/
-│   │   ├── services/
-│   │   ├── types/
-│   │   ├── App.tsx
-│   │   └── main.tsx
-│   ├── package.json
-│   └── vite.config.ts
-├── backend/
-│   ├── app/
-│   │   ├── routers/
-│   │   ├── schemas/
-│   │   ├── models/
-│   │   ├── services/
-│   │   └── database.py
-│   ├── main.py
-│   ├── requirements.txt
-│   └── tests/
-├── .gitignore
-└── README.md
-```
+Authentication and administrative workflows use dedicated service modules and the shared database helper because they coordinate multiple Supabase tables and Auth REST operations.
 
-This is a proposed future structure; some folders may not exist yet. Create them as needed. Never commit `backend/venv/`, `node_modules/`, build output, local databases, or secrets.
+## 5. Authentication sequence
+1. Frontend sends email/password to /api/auth/login.
+2. Backend applies the server-side pepper pre-hash and calls Supabase Auth.
+3. Supabase returns an access JWT and refresh token.
+4. Backend stores hashes of both tokens in app_sessions and sets the refresh token in an HttpOnly cookie.
+5. Frontend stores the short-lived access token and sends it as a Bearer token.
+6. Backend verifies signature/claims, loads current profile and checks ban status and active access-token hash.
+7. If an API request returns 401, frontend calls /api/auth/refresh; backend validates stored refresh hash, asks Supabase to rotate the pair, and updates stored hashes.
+8. Logout revokes the session and clears the cookie.
 
-## 4. Data design
-### ServiceRequest
-- `id`: unique integer or UUID.
-- `title`: required short text.
-- `description`: required text.
-- `category`: required category name or ID.
-- `status`: initially `Submitted`.
-- `created_at`: creation timestamp.
-- `updated_at`: timestamp updated when relevant fields change.
+## 6. Authorization
+- rbac.py centralizes role and request-level policies.
+- dependencies.py supplies the authenticated CurrentUser only after JWT, profile, ban and active-session checks.
+- group_service.py checks membership permission flags stored in PostgreSQL for every shared operation.
+- Admin endpoints use the require_admin dependency; admin service blocks self-role changes, self-ban and moderation of another admin.
 
-### User (Beta)
-- `id`: unique identifier.
-- `name`: display name.
-- `email`: unique login identifier.
-- `password_hash`: password hash only, never plaintext.
-- `role`: `student`, `staff`, or `admin`.
+## 7. Data model and migrations
+001_auth_rbac.sql creates profiles and links service requests to their owner. 002_final_features.sql creates groups, group_members, app_sessions, activity_logs, security_events and login_attempts; it adds ban metadata and group/assignee fields to service_requests. Apply migrations in order using the Supabase SQL Editor.
 
-In Beta, a request should reference its submitting user and optionally an assigned staff user. Students should access only their own requests; staff should only perform permitted actions.
+## 8. API organization
+- routers/auth.py: signup/login/refresh/logout.
+- routers/users.py: profile and session operations.
+- routers/requests.py: personal request CRUD.
+- routers/groups.py: groups, membership and shared requests.
+- routers/admin.py: overview, users, moderation, activity, security and exports.
 
-## 5. Planned API design
-| Method | Endpoint | Description |
-|---|---|---|
-| GET | `/api/health` | Existing basic health check |
-| GET | `/api/hello` | Existing sample endpoint |
-| POST | `/api/requests` | Create a request |
-| GET | `/api/requests` | List requests |
-| GET | `/api/requests/{request_id}` | Retrieve one request |
-| PATCH | `/api/requests/{request_id}/status` | Update status |
+## 9. Security considerations
+- Privileged Supabase credentials and password pepper remain backend environment variables.
+- Supabase Auth performs password hashing; CampusConnect applies a keyed HMAC pre-hash before Auth receives the password.
+- Only refresh-token hashes and access-token hashes are stored in app_sessions.
+- Cookies are HttpOnly, SameSite=Lax and Secure over HTTPS.
+- Active session hashes allow immediate revocation at the application API layer.
+- CORS is allow-listed and the backend applies common browser security headers.
+- Login lockout and security event records help detect repeated failures and rejected sessions.
+- CSV exports escape cells beginning with formula-triggering characters.
 
-Request endpoints are planned until implemented. Suggested statuses are `Submitted`, `In Progress`, and `Resolved`. Use appropriate HTTP status codes such as 201 for creation and 404 for missing records.
+## 10. Configuration and deployment
+Backend environment: SUPABASE_URL, SUPABASE_SECRET_KEY, SUPABASE_ANON_KEY (or the existing VITE_SUPABASE_ANON_KEY fallback), PASSWORD_PEPPER (stable; server-only), FRONTEND_ORIGINS and REFRESH_TOKEN_DAYS.
 
-## 6. Configuration
-- Keep environment-specific settings outside source code.
-- Use environment variables for API URLs, database locations, and secret keys.
-- Provide `.env.example` with placeholders only; never commit real credentials.
-- Add `.env`, Python virtual environments, `node_modules/`, build output, and local database files to `.gitignore`.
-- Configure CORS to allow the local frontend origin during development and restrict origins in production.
-- Use a strong secret from the hosting environment when authentication is implemented.
+Frontend environment: VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.
 
-Example placeholder settings:
-```env
-DATABASE_URL=sqlite:///./campusconnect.db
-FRONTEND_ORIGIN=http://localhost:5173
-SECRET_KEY=replace-with-a-long-random-secret-before-use
-```
+Vercel routes /api/* to FastAPI and other paths to Vite. Use Supabase PostgreSQL for persistent production data. Set the Supabase JWT lifetime to 900 seconds or less and apply database migrations before deploying code that requires the new tables.
 
-## 7. Deployment / configuration
-### Local development
-1. Install Node.js and Python.
-2. In `frontend/`, run `npm install`, then `npm run dev`.
-3. In `backend/`, create and activate a Python virtual environment and install `requirements.txt`.
-4. Start FastAPI using the configured development command.
-5. Open the frontend in a browser and use the backend Swagger UI to inspect API behavior.
-
-### Deployment plan
-- **Frontend:** Vercel is an optional target. Configure the API base URL to point to the deployed backend.
-- **Backend:** select a Python-compatible hosting provider; configure start command, environment variables, CORS, and database connection.
-- **Database:** use persistent storage; do not rely on an ephemeral filesystem for production data.
-- **Secrets:** configure them in the hosting provider, never in committed files.
-- **Verification:** test health checks, request create/list/update flows, and browser-to-API connectivity after deployment.
-
-Documenting deployment does not mean deployment is complete. Verify the live environment before claiming it is running.
-
-## 8. Security considerations
-- Validate client input on the backend.
-- Never store plaintext passwords.
-- Enforce authentication and role authorization before enabling protected Beta operations.
-- Avoid exposing sensitive data in responses or logs.
-- Use HTTPS in production.
-- Never commit `.env` files, credentials, or virtual environments.
-
-## 9. Testing strategy
-- Unit tests for validation and application logic.
-- API tests for request create/list/detail/status operations.
-- Negative tests for missing fields, invalid status, and unknown IDs.
-- Frontend tests for form validation and loading/error states.
-- Integration tests for frontend/backend communication.
-- Beta security tests for role-based access.
-
-## 10. Technical risks
-Database and hosting choices may change. Authentication must be designed before real student data is used. CORS and API URLs differ between local and deployed environments. Adjust the proposed structure to match implemented code.
+## 11. Testing strategy
+- pytest tests cover Student/Staff/Admin request authorization and ownership rules.
+- CI compiles backend modules, imports FastAPI and verifies expected routes.
+- CI installs frontend dependencies and runs TypeScript/Vite production build.
+- Live acceptance tests must verify refresh/revoke, roles, group permissions, user moderation, activity/security and exports on the deployed Vercel URL.
