@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - refactor/final-folder-structure
+      - final-viva-2026
   pull_request:
     branches:
       - main
