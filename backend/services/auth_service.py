@@ -1,5 +1,6 @@
-"""Supabase authentication with rotated HttpOnly refresh-cookie sessions."""
+"""Supabase Auth with server-side peppering, refresh rotation and session management."""
 import hashlib
+import hmac
 import os
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -7,10 +8,23 @@ from typing import Any
 import httpx
 from fastapi import HTTPException, Request
 
-from database import SUPABASE_ANON_KEY, SUPABASE_URL, execute_query, get_database
+from database import SUPABASE_ANON_KEY, SUPABASE_SECRET_KEY, SUPABASE_URL, execute_query, get_database
 from services.activity_service import record_activity, record_security_event
 
 REFRESH_DAYS = int(os.getenv("REFRESH_TOKEN_DAYS", "7"))
+# Prefer a dedicated PASSWORD_PEPPER. The server-only Supabase secret is a stable
+# fallback for existing deployments; never expose either value to the frontend.
+PASSWORD_PEPPER = os.getenv("PASSWORD_PEPPER") or SUPABASE_SECRET_KEY
+
+
+def _prepared_password(password: str) -> str:
+    if not PASSWORD_PEPPER:
+        raise HTTPException(status_code=503, detail="Server-side password pepper is not configured.")
+    digest = hmac.new(
+        PASSWORD_PEPPER.encode("utf-8"), password.encode("utf-8"), hashlib.sha256
+    ).hexdigest()
+    # Supabase Auth then stores this value with its own salted bcrypt hash.
+    return f"Cc!{digest}9"
 
 
 def _auth_request(path: str, payload: dict[str, Any]) -> dict[str, Any]:
@@ -31,6 +45,24 @@ def _auth_request(path: str, payload: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
+def _update_supabase_password(access_token: str, prepared_password: str) -> None:
+    if not SUPABASE_URL or not SUPABASE_ANON_KEY:
+        raise HTTPException(status_code=503, detail="Supabase Auth is not configured.")
+    try:
+        response = httpx.put(
+            f"{SUPABASE_URL.rstrip('/')}/auth/v1/user",
+            headers={"apikey": SUPABASE_ANON_KEY, "Authorization": f"Bearer {access_token}",
+                     "Content-Type": "application/json"},
+            json={"password": prepared_password}, timeout=15.0,
+        )
+        if not response.is_success:
+            raise HTTPException(status_code=400, detail="Password update was rejected by Supabase Auth.")
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail="Password update service is unavailable.") from exc
+
+
 def token_hash(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
@@ -43,7 +75,7 @@ def _context(request: Request) -> tuple[str, str]:
 
 def register(email: str, password: str, full_name: str) -> dict[str, Any]:
     data = _auth_request("signup", {
-        "email": email.strip().lower(), "password": password,
+        "email": email.strip().lower(), "password": _prepared_password(password),
         "data": {"full_name": full_name.strip()},
     })
     if data.get("access_token"):
@@ -65,13 +97,30 @@ def login(email: str, password: str, request: Request) -> tuple[dict[str, Any], 
         raise HTTPException(status_code=429, detail="Too many failed attempts. Try again in 15 minutes.")
 
     try:
-        data = _auth_request("token?grant_type=password", {"email": email, "password": password})
+        data = _auth_request("token?grant_type=password", {
+            "email": email, "password": _prepared_password(password),
+        })
     except HTTPException:
-        execute_query(db.table("login_attempts").insert({
-            "email": email, "ip_address": ip, "succeeded": False,
-        }))
-        record_security_event("login_failed", request, email=email)
-        raise
+        # One-time migration: existing accounts were originally registered before
+        # server-side peppering. Verify the old password, then upgrade it in Auth.
+        try:
+            data = _auth_request("token?grant_type=password", {"email": email, "password": password})
+            legacy_access = str(data.get("access_token") or "")
+            if legacy_access:
+                try:
+                    _update_supabase_password(legacy_access, _prepared_password(password))
+                    record_security_event(
+                        "legacy_password_upgraded", request,
+                        actor_id=str((data.get("user") or {}).get("id") or ""), email=email,
+                    )
+                except HTTPException:
+                    record_security_event("legacy_password_upgrade_failed", request, email=email)
+        except HTTPException:
+            execute_query(db.table("login_attempts").insert({
+                "email": email, "ip_address": ip, "succeeded": False,
+            }))
+            record_security_event("login_failed", request, email=email)
+            raise
 
     user_id = str((data.get("user") or {}).get("id") or "")
     profile = execute_query(
@@ -103,10 +152,8 @@ def login(email: str, password: str, request: Request) -> tuple[dict[str, Any], 
     }))
     record_activity(user_id, "login", "session", session_id, request)
     return ({
-        "access_token": access_token,
-        "token_type": "bearer",
-        "expires_in": int(data.get("expires_in") or 900),
-        "session_id": session_id,
+        "access_token": access_token, "token_type": "bearer",
+        "expires_in": int(data.get("expires_in") or 900), "session_id": session_id,
         "user": {
             "id": user_id, "email": user.get("email") or email,
             "full_name": user.get("full_name") or "", "role": user.get("role") or "student",
@@ -224,24 +271,18 @@ def update_profile(user_id: str, full_name: str, request: Request) -> dict[str, 
 
 def change_password(user_id: str, email: str, current_password: str,
                     new_password: str, request: Request) -> None:
-    data = _auth_request("token?grant_type=password", {
-        "email": email, "password": current_password,
-    })
+    try:
+        data = _auth_request("token?grant_type=password", {
+            "email": email, "password": _prepared_password(current_password),
+        })
+    except HTTPException:
+        # Compatibility for a legacy account not yet migrated by login.
+        data = _auth_request("token?grant_type=password", {
+            "email": email, "password": current_password,
+        })
     access = str(data.get("access_token") or "")
     if not access:
         raise HTTPException(status_code=401, detail="Current password could not be verified.")
-    try:
-        response = httpx.put(
-            f"{SUPABASE_URL.rstrip('/')}/auth/v1/user",
-            headers={"apikey": str(SUPABASE_ANON_KEY), "Authorization": f"Bearer {access}",
-                     "Content-Type": "application/json"},
-            json={"password": new_password}, timeout=15.0,
-        )
-        if not response.is_success:
-            raise HTTPException(status_code=400, detail="Password update was rejected by Supabase Auth.")
-    except HTTPException:
-        raise
-    except Exception as exc:
-        raise HTTPException(status_code=502, detail="Password update service is unavailable.") from exc
+    _update_supabase_password(access, _prepared_password(new_password))
     revoke_all(user_id, request)
     record_activity(user_id, "password_changed", "user", user_id, request)
