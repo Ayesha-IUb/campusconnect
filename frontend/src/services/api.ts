@@ -86,8 +86,8 @@ export async function logoutRequest(_session?: Session): Promise<void> {
   }
 }
 
-export async function downloadCsv(session: Session, kind: string, filters: Record<string, string> = {}): Promise<void> {
-  const query = new URLSearchParams(Object.entries(filters).filter(([, value]) => Boolean(value)));
+export async function downloadCsv(session: Session, kind: string, filters: Record<string, string | undefined> = {}): Promise<void> {
+  const query = new URLSearchParams(Object.entries(filters).filter(([, value]) => Boolean(value)) as [string, string][]);
   const suffix = query.toString() ? `?${query.toString()}` : "";
   const response = await fetch(`/api/admin/export/${encodeURIComponent(kind)}${suffix}`, {
     credentials: "include",

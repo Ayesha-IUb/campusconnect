@@ -43,6 +43,8 @@ export default function FinalWorkspace({ page, profile, session, onSignOut }: Fi
   const [overview, setOverview] = useState<Record<string, number>>({});
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [userSearch, setUserSearch] = useState("");
+  const [userRoleFilter, setUserRoleFilter] = useState("");
+  const [userBannedFilter, setUserBannedFilter] = useState("");
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
   const [userDetail, setUserDetail] = useState<any>(null);
   const [activity, setActivity] = useState<AuditEntry[]>([]);
