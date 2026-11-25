@@ -33,6 +33,13 @@ def change_role(user_id: str, payload: RoleChange, request: Request,
     return admin_service.change_role(user_id, payload.role, admin, request)
 
 
+@router.delete("/users/{user_id}/sessions/{session_id}")
+def revoke_user_session(user_id: str, session_id: str, request: Request,
+                        admin: CurrentUser = Depends(require_admin)):
+    admin_service.revoke_user_session(user_id, session_id, admin, request)
+    return {"message": "User session revoked."}
+
+
 @router.post("/users/{user_id}/ban")
 def ban_user(user_id: str, payload: BanInput, request: Request,
              admin: CurrentUser = Depends(require_admin)):

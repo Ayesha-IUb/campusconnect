@@ -24,6 +24,7 @@ def overview() -> dict[str, int]:
         "groups": len(groups),
         "new_users_7d": sum(row.get("created_at", "") >= since for row in users),
         "new_requests_7d": sum(row.get("created_at", "") >= since for row in requests),
+        "new_groups_7d": sum(row.get("created_at", "") >= since for row in groups),
     }
 
 
@@ -273,3 +274,14 @@ def purge_activity(older_than_days: int, actor: CurrentUser, request) -> int:
     record_activity(actor["id"], "activity_purged", "activity", request=request,
                     details={"deleted": deleted, "older_than_days": older_than_days})
     return deleted
+
+
+
+def revoke_user_session(user_id: str, session_id: str, actor: CurrentUser, request) -> None:
+    result = execute_query(get_database().table("app_sessions").update({
+        "revoked_at": datetime.now(timezone.utc).isoformat(),
+    }).eq("id", session_id).eq("user_id", user_id).is_("revoked_at", "null").select("id"))
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Active session not found.")
+    record_activity(actor["id"], "admin_session_revoked", "session", session_id, request,
+                    {"target_user_id": user_id})

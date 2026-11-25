@@ -50,6 +50,7 @@ export default function FinalWorkspace({ page, profile, session, onSignOut }: Fi
   const [allRequests, setAllRequests] = useState<ServiceRequest[]>([]);
   const [allGroups, setAllGroups] = useState<CampusGroup[]>([]);
   const [moderationSearch, setModerationSearch] = useState("");
+  const [requestStatusFilter, setRequestStatusFilter] = useState("");
 
   async function loadGroups() {
     const rows = await apiRequest<CampusGroup[]>("/api/groups", session);
@@ -227,7 +228,12 @@ export default function FinalWorkspace({ page, profile, session, onSignOut }: Fi
   }
 
   async function exportData(kind: string) {
-    try { await downloadCsv(session, kind); }
+    const filters = kind === "users"
+      ? { search: userSearch, role: userRoleFilter, banned: userBannedFilter }
+      : kind === "requests"
+        ? { search: moderationSearch, status: requestStatusFilter }
+        : {};
+    try { await downloadCsv(session, kind, filters); }
     catch (err) { setError(err instanceof Error ? err.message : "CSV export failed."); }
   }
 
@@ -241,7 +247,7 @@ export default function FinalWorkspace({ page, profile, session, onSignOut }: Fi
   }
 
   const filteredUsers = users.filter(user => `${user.email} ${user.full_name}`.toLowerCase().includes(userSearch.toLowerCase()));
-  const filteredRequests = allRequests.filter(item => `${item.title} ${item.category} ${item.status}`.toLowerCase().includes(moderationSearch.toLowerCase()));
+  const filteredRequests = allRequests.filter(item => `${item.title} ${item.category} ${item.status}`.toLowerCase().includes(moderationSearch.toLowerCase()) && (!requestStatusFilter || item.status === requestStatusFilter));
   const filteredGroups = allGroups.filter(item => `${item.name} ${item.description}`.toLowerCase().includes(moderationSearch.toLowerCase()));
 
   return (
