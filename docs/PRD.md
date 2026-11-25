@@ -1,86 +1,67 @@
 # Product Requirements Document (PRD)
 ## CampusConnect: University Service Request Management System
 
-**Version:** 1.1 | **Status:** MVP planning document
+**Version:** 2.0 · **Status:** Final project scope
 
 ## 1. Product overview
-CampusConnect is a web application for submitting, tracking, and managing university service requests. Students can report campus problems; staff can review requests and update their status.
+CampusConnect is a web application for submitting, tracking and managing university service requests. Students report campus problems; staff review and process them; administrators manage users, content and security.
 
 ## 2. Problem statement
-Requests about classroom equipment, Wi-Fi, facilities, and other services may be scattered across messages, calls, or paper forms. This makes tracking progress difficult for students and organizing work difficult for staff. CampusConnect provides one organized workflow.
+Requests about classroom equipment, Wi-Fi, facilities and library services can be scattered across messages or paper forms. CampusConnect centralizes request ownership, status and group collaboration, so students can track progress and staff can manage work.
 
-## 3. Goals and success criteria
-- Students can submit a request with a title, description, and category.
-- Students can view submitted requests and their statuses.
-- Staff can review requests and update status.
-- Request information is stored centrally.
-- The design supports later authentication and role-based access control.
+## 3. Product goals
+- Provide signup/login and secure JWT-protected API access.
+- Restrict personal records to their owners and enforce Student/Staff/Admin roles on the server.
+- Allow groups to share service requests with fine-grained create/edit/assign permissions.
+- Give administrators tools to manage users, content, activity and security events.
+- Keep records in hosted Supabase PostgreSQL and deploy the app through Vercel.
 
-MVP success means a valid request can be created, saved, retrieved, displayed, and updated, while invalid input returns a clear error.
+## 4. User classes
+- **Student:** submit requests, view their own requests, collaborate in groups where invited.
+- **Staff:** review all service requests and update status; no permission to create/delete personal requests.
+- **Admin:** manage users and service content, review monitoring data and export records.
 
-## 4. Target users
-### Students
-Students who need to report a campus service issue and track whether it has been received, is being handled, or has been resolved.
+## 5. Functional scope
 
-### Service staff
-University employees, such as IT support or facilities staff, who review requests and update progress.
+### Authentication and profile
+- Sign up and sign in using email/password.
+- Verify signed access JWTs on protected requests.
+- Refresh tokens using an HttpOnly cookie, rotate tokens and revoke sessions on logout.
+- List/revoke active sessions.
+- Update profile name and change password after verifying current password.
 
-### Administrators
-Authorized personnel who will manage users, service categories, and permissions in a later release.
+### Service requests
+- Create, list, view, update and delete requests.
+- Enforce request ownership and role permissions.
+- Validate title, description, category and status.
 
-## 5. User stories
-- As a student, I want to submit a service request so the relevant team can address a problem.
-- As a student, I want to view request status so I know whether action has been taken.
-- As a staff member, I want to review requests and update their status so students can see progress.
-- As an administrator, I want to manage categories and access so the system remains organized.
+### Groups
+- Create and list groups.
+- Add/remove members and configure create/edit/assign permissions.
+- Create and list shared requests; update only when permitted.
+- Restrict rename, delete and member management to the group owner.
 
-## 6. Scope
-### MVP
-- Create, list, and retrieve service requests.
-- Update request status.
-- Validate required fields.
-- React + TypeScript frontend and FastAPI backend.
-- Persistent storage suitable for local development.
+### Administration
+- Overview counts, user search/filter/pagination and user detail.
+- Role changes, ban/unban with reason, session revocation and bulk user actions.
+- Request and group moderation.
+- Activity and security logs, IP/account summaries, CSV export and activity purge.
 
-### Later / Beta
-- Authentication and role-based permissions.
-- Separate student, staff, and administrator views.
-- Request assignment, filtering, and search.
-- Audit logging, security improvements, and deployment.
+## 6. Non-functional requirements
+- Security: never commit secrets, validate inputs, enforce authorization server-side, limit CORS and use secure cookies over HTTPS.
+- Reliability: return meaningful HTTP errors and keep data in hosted PostgreSQL.
+- Maintainability: separate routers, services, repositories, schemas, models, frontend components, services and types.
+- Testability: automate RBAC policy checks and production builds.
+- Usability: provide loading, error and empty states and responsive workspace layouts.
 
-### Out of scope for MVP
-- Native mobile apps.
-- University single sign-on.
-- Email/SMS notifications.
-- Complex service-level analytics.
+## 7. Success criteria
+The final project is considered ready for submission after:
+- Frontend and backend build checks pass.
+- Supabase migrations are applied to the hosted project.
+- Demo accounts and a mixed-permission group are configured.
+- Key authentication, ownership, role and group permission rules are verified on the live Vercel URL.
+- Admin moderation, activity/security views and exports are verified.
+- Genuine screenshots and a 5–8 minute demo video are prepared.
 
-## 7. Milestones
-| Milestone | Planned work | Completion evidence |
-|---|---|---|
-| M1: Foundation | Repository, frontend/backend setup, PRD/SRS/TDD, Git workflow | App runs locally and docs are reviewed |
-| M2: MVP API | Request model and create/list/detail/status endpoints | API tests pass |
-| M3: MVP frontend | Request form and request list/status view | Frontend calls API and displays saved data |
-| M4: Integration | Validation, error handling, tests | Core flows pass documented tests |
-| M5: Beta | Authentication, roles, staff/admin views | Role permissions are tested |
-| M6: Deployment | Environment setup and hosting | Deployed app and configuration documented |
-
-These milestones are plans, not claims that all features are already implemented.
-
-## 8. Functional requirements
-- FR-1: Accept a request title, description, and category.
-- FR-2: Reject requests with missing required fields.
-- FR-3: Assign a unique ID to each saved request.
-- FR-4: Set new requests to `Submitted`.
-- FR-5: Allow requests to be listed and retrieved.
-- FR-6: Allow authorized staff to update status in Beta.
-- FR-7: Enforce role-based access in Beta.
-
-## 9. Non-functional requirements
-- Usability: forms and status labels should be clear.
-- Maintainability: separate frontend and backend modules.
-- Reliability: return explicit API errors.
-- Security: protect credentials and privileged operations.
-- Testability: test core API behavior automatically.
-
-## 10. Assumptions and risks
-This is a course project and initially a local demonstration. Real staff accounts and university service rules may not be available. Minimize personal data and use non-sensitive test data.
+## 8. Out of scope
+University single sign-on, payment services, native mobile apps and production integrations with university HR/student systems.

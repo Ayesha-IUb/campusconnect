@@ -5,6 +5,7 @@ from models import CurrentUser
 from rbac import require_admin
 from schemas import BanInput, BulkUserAction, BulkRequestDeleteInput, BulkDeleteInput, RoleChange
 from services import admin_service
+from services.activity_service import record_activity
 
 router = APIRouter(prefix="/api/admin", tags=["Admin"])
 
@@ -107,12 +108,12 @@ def security(event_type: str | None = None, ip_address: str | None = None,
 
 
 @router.get("/export/{kind}")
-def export(kind: str, search: str | None = None, role: str | None = None,
+def export(kind: str, request: Request, search: str | None = None, role: str | None = None,
            banned: str | None = None, status: str | None = None, action: str | None = None,
-           _: CurrentUser = Depends(require_admin)):
-    csv_text = admin_service.export_csv(kind, {
-        "search": search, "role": role, "banned": banned, "status": status, "action": action,
-    })
+           admin: CurrentUser = Depends(require_admin)):
+    filters = {"search": search, "role": role, "banned": banned, "status": status, "action": action}
+    csv_text = admin_service.export_csv(kind, filters)
+    record_activity(admin["id"], "csv_exported", "export", kind, request, {"filters": filters})
     return Response(content=csv_text, media_type="text/csv; charset=utf-8",
                     headers={"Content-Disposition": f'attachment; filename="campusconnect-{kind}.csv"'})
 

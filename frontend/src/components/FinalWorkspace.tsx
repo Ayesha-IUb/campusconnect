@@ -37,6 +37,7 @@ export default function FinalWorkspace({ page, profile, session, onSignOut }: Fi
   const [requestTitle, setRequestTitle] = useState("");
   const [requestDescription, setRequestDescription] = useState("");
   const [requestCategory, setRequestCategory] = useState<Category>("Other");
+  const [groupAssignedTo, setGroupAssignedTo] = useState("");
 
   // Admin
   const [adminTab, setAdminTab] = useState<"users" | "content" | "activity" | "security">("users");
@@ -46,9 +47,13 @@ export default function FinalWorkspace({ page, profile, session, onSignOut }: Fi
   const [userRoleFilter, setUserRoleFilter] = useState("");
   const [userBannedFilter, setUserBannedFilter] = useState("");
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
+  const [selectedRequestIds, setSelectedRequestIds] = useState<number[]>([]);
+  const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([]);
   const [userDetail, setUserDetail] = useState<any>(null);
   const [activity, setActivity] = useState<AuditEntry[]>([]);
   const [securityEvents, setSecurityEvents] = useState<SecurityEntry[]>([]);
+  const [securityByIp, setSecurityByIp] = useState<Record<string, number>>({});
+  const [securityByEmail, setSecurityByEmail] = useState<Record<string, number>>({});
   const [allRequests, setAllRequests] = useState<ServiceRequest[]>([]);
   const [allGroups, setAllGroups] = useState<CampusGroup[]>([]);
   const [moderationSearch, setModerationSearch] = useState("");
@@ -80,7 +85,7 @@ export default function FinalWorkspace({ page, profile, session, onSignOut }: Fi
       apiRequest<Record<string, number>>("/api/admin/overview", session),
       apiRequest<{ items: AdminUser[] }>("/api/admin/users?page=1&page_size=100", session),
       apiRequest<{ items: AuditEntry[] }>("/api/admin/activity?page=1&page_size=50", session),
-      apiRequest<{ items: SecurityEntry[] }>("/api/admin/security?page=1&page_size=50", session),
+      apiRequest<{ items: SecurityEntry[]; by_ip: Record<string, number>; by_email: Record<string, number> }>("/api/admin/security?page=1&page_size=50", session),
       apiRequest<ServiceRequest[]>("/api/admin/requests?page=1&page_size=100", session),
       apiRequest<CampusGroup[]>("/api/admin/groups?page=1&page_size=100", session),
     ]);
@@ -88,6 +93,8 @@ export default function FinalWorkspace({ page, profile, session, onSignOut }: Fi
     setUsers(userPage.items || []);
     setActivity(activityPage.items || []);
     setSecurityEvents(securityPage.items || []);
+    setSecurityByIp(securityPage.by_ip || {});
+    setSecurityByEmail(securityPage.by_email || {});
     setAllRequests(requestRows);
     setAllGroups(groupRows);
   }
@@ -139,6 +146,14 @@ export default function FinalWorkspace({ page, profile, session, onSignOut }: Fi
     } catch (err) { setError(err instanceof Error ? err.message : "Could not revoke session."); }
   }
 
+  async function revokeAllSessions() {
+    if (!window.confirm("Sign out every device, including this one?")) return;
+    try {
+      await apiRequest("/api/auth/sessions/revoke-all", session, { method: "POST" });
+      onSignOut();
+    } catch (err) { setError(err instanceof Error ? err.message : "Could not revoke all sessions."); }
+  }
+
   async function revokeOthers() {
     setError("");
     try {
@@ -173,15 +188,57 @@ export default function FinalWorkspace({ page, profile, session, onSignOut }: Fi
     } catch (err) { setError(err instanceof Error ? err.message : "Could not add group member."); }
   }
 
+  async function renameGroup(group: CampusGroup) {
+    const name = window.prompt("New group name:", group.name);
+    if (!name || name.trim().length < 2) return;
+    try {
+      await apiRequest(`/api/groups/${group.id}`, session, {
+        method: "PATCH", body: JSON.stringify({ name: name.trim(), description: group.description }),
+      });
+      await loadGroups();
+      setNotice("Group renamed.");
+    } catch (err) { setError(err instanceof Error ? err.message : "Group rename failed."); }
+  }
+
+  async function deleteGroup(group: CampusGroup) {
+    if (!window.confirm(`Delete group "${group.name}"?`)) return;
+    try {
+      await apiRequest(`/api/groups/${group.id}`, session, { method: "DELETE" });
+      setSelectedGroup(null); setMembers([]); setGroupRequests([]);
+      await loadGroups();
+      setNotice("Group deleted.");
+    } catch (err) { setError(err instanceof Error ? err.message : "Group deletion failed."); }
+  }
+
+  async function removeGroupMember(member: GroupMember) {
+    if (!selectedGroup || !window.confirm("Remove this member?")) return;
+    try {
+      await apiRequest(`/api/groups/${selectedGroup.id}/members/${member.user_id}`, session, { method: "DELETE" });
+      await selectGroup(selectedGroup);
+      setNotice("Group member removed.");
+    } catch (err) { setError(err instanceof Error ? err.message : "Could not remove member."); }
+  }
+
+  async function updateSharedRequest(item: ServiceRequest, patch: { status?: RequestStatus; assigned_to?: string | null }) {
+    if (!selectedGroup) return;
+    try {
+      await apiRequest(`/api/groups/${selectedGroup.id}/requests/${item.id}`, session, {
+        method: "PATCH", body: JSON.stringify(patch),
+      });
+      await selectGroup(selectedGroup);
+      setNotice("Shared request updated.");
+    } catch (err) { setError(err instanceof Error ? err.message : "Shared request update failed."); }
+  }
+
   async function createGroupRequest(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!selectedGroup) return;
     setError(""); setNotice("");
     try {
       await apiRequest(`/api/groups/${selectedGroup.id}/requests`, session, {
-        method: "POST", body: JSON.stringify({ title: requestTitle, description: requestDescription, category: requestCategory }),
+        method: "POST", body: JSON.stringify({ title: requestTitle, description: requestDescription, category: requestCategory, ...(groupAssignedTo ? { assigned_to: groupAssignedTo } : {}) }),
       });
-      setRequestTitle(""); setRequestDescription("");
+      setRequestTitle(""); setRequestDescription(""); setGroupAssignedTo("");
       await selectGroup(selectedGroup);
       setNotice("Shared request created.");
     } catch (err) { setError(err instanceof Error ? err.message : "Could not create shared request."); }
@@ -224,6 +281,22 @@ export default function FinalWorkspace({ page, profile, session, onSignOut }: Fi
     } catch (err) { setError(err instanceof Error ? err.message : "Bulk action failed."); }
   }
 
+  async function revokeUserSession(userId: string, sessionId: string) {
+    try {
+      await apiRequest(`/api/admin/users/${userId}/sessions/${sessionId}`, session, { method: "DELETE" });
+      await showUser(userId);
+      setNotice("User session revoked.");
+    } catch (err) { setError(err instanceof Error ? err.message : "Could not revoke user session."); }
+  }
+
+  async function revokeUserSession(userId: string, sessionId: string) {
+    try {
+      await apiRequest(`/api/admin/users/${userId}/sessions/${sessionId}`, session, { method: "DELETE" });
+      await showUser(userId);
+      setNotice("User session revoked.");
+    } catch (err) { setError(err instanceof Error ? err.message : "Could not revoke user session."); }
+  }
+
   async function showUser(userId: string) {
     try { setUserDetail(await apiRequest(`/api/admin/users/${userId}`, session)); }
     catch (err) { setError(err instanceof Error ? err.message : "Could not load user details."); }
@@ -234,7 +307,9 @@ export default function FinalWorkspace({ page, profile, session, onSignOut }: Fi
       ? { search: userSearch, role: userRoleFilter, banned: userBannedFilter }
       : kind === "requests"
         ? { search: moderationSearch, status: requestStatusFilter }
-        : {};
+        : kind === "groups"
+          ? { search: moderationSearch }
+          : {};
     try { await downloadCsv(session, kind, filters); }
     catch (err) { setError(err instanceof Error ? err.message : "CSV export failed."); }
   }
@@ -248,7 +323,7 @@ export default function FinalWorkspace({ page, profile, session, onSignOut }: Fi
     } catch (err) { setError(err instanceof Error ? err.message : "Delete failed."); }
   }
 
-  const filteredUsers = users.filter(user => `${user.email} ${user.full_name}`.toLowerCase().includes(userSearch.toLowerCase()));
+  const filteredUsers = users.filter(user => `${user.email} ${user.full_name}`.toLowerCase().includes(userSearch.toLowerCase()) && (!userRoleFilter || user.role === userRoleFilter) && (!userBannedFilter || String(user.is_banned) === userBannedFilter));
   const filteredRequests = allRequests.filter(item => `${item.title} ${item.category} ${item.status}`.toLowerCase().includes(moderationSearch.toLowerCase()) && (!requestStatusFilter || item.status === requestStatusFilter));
   const filteredGroups = allGroups.filter(item => `${item.name} ${item.description}`.toLowerCase().includes(moderationSearch.toLowerCase()));
 
@@ -282,7 +357,7 @@ export default function FinalWorkspace({ page, profile, session, onSignOut }: Fi
             <button className="primary-button" type="submit">Change password</button>
           </form>
           <div className="final-card final-wide">
-            <div className="panel-heading"><div><h3>Signed-in devices</h3><p>Revoke this device or other sessions.</p></div><button className="secondary-button" type="button" onClick={() => void revokeOthers()}>Sign out other devices</button></div>
+            <div className="panel-heading"><div><h3>Signed-in devices</h3><p>Revoke this device or other sessions.</p></div><button className="secondary-button" type="button" onClick={() => void revokeOthers()}>Sign out other devices</button><button className="danger-button" type="button" onClick={() => void revokeAllSessions()}>Sign out everywhere</button></div>
             {sessions.length === 0 ? <p>No session records found.</p> : sessions.map(item => (
               <div className="final-row" key={item.id}>
                 <div><strong>{item.device_name || "Browser"}</strong><small>{item.ip_address || "IP unavailable"} · Last active {new Date(item.last_seen_at).toLocaleString()}</small><small>{item.revoked_at ? "Revoked" : item.id === session.session_id ? "Current device" : "Active"}</small></div>
@@ -313,8 +388,7 @@ export default function FinalWorkspace({ page, profile, session, onSignOut }: Fi
           </div>
           {selectedGroup && (
             <div className="final-card final-wide">
-              <h3>{selectedGroup.name}</h3>
-              <p>{selectedGroup.description}</p>
+              <div className="panel-heading"><div><h3>{selectedGroup.name}</h3><p>{selectedGroup.description}</p></div>{selectedGroup.owner_id === profile.id && <div><button type="button" className="secondary-button" onClick={() => void renameGroup(selectedGroup)}>Rename</button><button type="button" className="danger-button" onClick={() => void deleteGroup(selectedGroup)}>Delete group</button></div>}</div>
               <h4>Members and permissions</h4>
               {members.map(member => (
                 <div className="final-row" key={member.id}>
@@ -323,6 +397,7 @@ export default function FinalWorkspace({ page, profile, session, onSignOut }: Fi
                     member.can_edit_requests && "Edit",
                     member.can_assign_requests && "Assign",
                   ].filter(Boolean).join(" · ") || "Read only"}</small></div>
+                  {selectedGroup.owner_id === profile.id && <button className="danger-button" type="button" onClick={() => void removeGroupMember(member)}>Remove</button>}
                 </div>
               ))}
               {selectedGroup.owner_id === profile.id && (
@@ -337,12 +412,31 @@ export default function FinalWorkspace({ page, profile, session, onSignOut }: Fi
                 </form>
               )}
               <h4>Shared requests</h4>
-              {groupRequests.map(item => <div className="final-row" key={item.id}><div><strong>#{item.id} {item.title}</strong><small>{item.category} · {item.status}</small><small>{item.description}</small></div></div>)}
+              {groupRequests.map(item => {
+                const permissionsForMe = members.find(member => member.user_id === profile.id);
+                const canEditShared = selectedGroup.owner_id === profile.id || !!permissionsForMe?.can_edit_requests;
+                const canAssignShared = selectedGroup.owner_id === profile.id || !!permissionsForMe?.can_assign_requests;
+                return <div className="final-row" key={item.id}>
+                  <div><strong>#{item.id} {item.title}</strong><small>{item.category} · {item.status}</small><small>{item.description}</small></div>
+                  <div className="final-row-actions">
+                    <select aria-label={`Status for request ${item.id}`} value={item.status} disabled={!canEditShared}
+                      onChange={event => void updateSharedRequest(item, { status: event.target.value as RequestStatus })}>
+                      {statuses.map(status => <option key={status} value={status}>{status}</option>)}
+                    </select>
+                    {canAssignShared && <select aria-label={`Assignee for request ${item.id}`} value={item.assigned_to || ""}
+                      onChange={event => void updateSharedRequest(item, { assigned_to: event.target.value || null })}>
+                      <option value="">Unassigned</option><option value={selectedGroup.owner_id}>Group owner</option>
+                      {members.map(member => <option key={member.user_id} value={member.user_id}>{member.user_id}</option>)}
+                    </select>}
+                  </div>
+                </div>;
+              })}
               <form className="final-card inner-card" onSubmit={createGroupRequest}>
                 <h4>Create shared request</h4>
                 <label htmlFor="shared-title">Title</label><input id="shared-title" value={requestTitle} onChange={e => setRequestTitle(e.target.value)} minLength={3} required />
                 <label htmlFor="shared-description">Description</label><textarea id="shared-description" value={requestDescription} onChange={e => setRequestDescription(e.target.value)} minLength={5} required />
                 <label htmlFor="shared-category">Category</label><select id="shared-category" value={requestCategory} onChange={e => setRequestCategory(e.target.value as Category)}>{categories.map(x => <option key={x}>{x}</option>)}</select>
+                <label htmlFor="shared-assignee">Assign to member (optional)</label><select id="shared-assignee" value={groupAssignedTo} onChange={e => setGroupAssignedTo(e.target.value)}><option value="">Unassigned</option><option value={selectedGroup.owner_id}>Group owner</option>{members.map(member => <option key={member.user_id} value={member.user_id}>{member.user_id}</option>)}</select>
                 <button className="primary-button" type="submit">Submit shared request</button>
               </form>
             </div>
@@ -364,7 +458,7 @@ export default function FinalWorkspace({ page, profile, session, onSignOut }: Fi
           </div>
           {adminTab === "users" && (
             <div className="final-card">
-              <div className="final-toolbar"><input aria-label="Search users" placeholder="Search users by name or email" value={userSearch} onChange={e=>setUserSearch(e.target.value)}/><button className="secondary-button" type="button" onClick={()=>void bulkUsers("ban")} disabled={!selectedUserIds.length}>Bulk ban</button><button className="secondary-button" type="button" onClick={()=>void bulkUsers("unban")} disabled={!selectedUserIds.length}>Bulk unban</button></div>
+              <div className="final-toolbar"><input aria-label="Search users" placeholder="Search users by name or email" value={userSearch} onChange={e=>setUserSearch(e.target.value)}/><select aria-label="Filter users by role" value={userRoleFilter} onChange={e=>setUserRoleFilter(e.target.value)}><option value="">All roles</option><option value="student">Students</option><option value="staff">Staff</option><option value="admin">Admins</option></select><select aria-label="Filter users by status" value={userBannedFilter} onChange={e=>setUserBannedFilter(e.target.value)}><option value="">All statuses</option><option value="false">Active</option><option value="true">Banned</option></select><button className="secondary-button" type="button" onClick={()=>void bulkUsers("ban")} disabled={!selectedUserIds.length}>Bulk ban</button><button className="secondary-button" type="button" onClick={()=>void bulkUsers("unban")} disabled={!selectedUserIds.length}>Bulk unban</button></div>
               <div className="table-scroll"><table className="final-table"><thead><tr><th>Select</th><th>User</th><th>Role</th><th>Status</th><th>Actions</th></tr></thead><tbody>
                 {filteredUsers.map(user=><tr key={user.id}>
                   <td><input type="checkbox" checked={selectedUserIds.includes(user.id)} onChange={e=>setSelectedUserIds(ids=>e.target.checked?[...ids,user.id]:ids.filter(id=>id!==user.id))}/></td>
@@ -374,20 +468,34 @@ export default function FinalWorkspace({ page, profile, session, onSignOut }: Fi
                   <td><button className={user.is_banned?"secondary-button":"danger-button"} type="button" disabled={user.role==="admin" || user.id===profile.id} onClick={()=>void toggleBan(user)}>{user.is_banned?"Unban":"Ban"}</button></td>
                 </tr>)}
               </tbody></table></div>
-              {userDetail && <div className="final-card inner-card"><div className="panel-heading"><h3>User detail</h3><button type="button" className="secondary-button" onClick={()=>setUserDetail(null)}>Close</button></div><pre>{JSON.stringify(userDetail,null,2)}</pre></div>}
+              {userDetail && <div className="final-card inner-card"><div className="panel-heading"><h3>User detail</h3><button type="button" className="secondary-button" onClick={()=>setUserDetail(null)}>Close</button></div><div className="user-detail-panel">
+                <h3>{userDetail.profile?.full_name || userDetail.profile?.email}</h3>
+                <p>{userDetail.profile?.email} · {userDetail.profile?.role} · {userDetail.profile?.is_banned ? "Banned" : "Active"}</p>
+                <h4>Sessions</h4>
+                {(userDetail.sessions || []).map((item: AppSession) => (
+                  <div className="final-row" key={item.id}>
+                    <div><strong>{item.device_name || "Browser"}</strong><small>{item.ip_address || "IP unavailable"} · {item.revoked_at ? "Revoked" : "Active"}</small></div>
+                    {!item.revoked_at && <button type="button" className="danger-button" onClick={() => void revokeUserSession(userDetail.profile.id, item.id)}>Revoke session</button>}
+                  </div>
+                ))}
+                <h4>Recent requests</h4>
+                {(userDetail.requests || []).map((item: ServiceRequest) => <div className="final-row" key={item.id}><strong>#{item.id} {item.title}</strong><small>{item.status} · {item.category}</small></div>)}
+                <h4>Groups and recent activity</h4>
+                <pre>{JSON.stringify({ groups: userDetail.groups, activity: userDetail.activity }, null, 2)}</pre>
+              </div></div>}
             </div>
           )}
           {adminTab === "content" && (
             <div className="final-card">
-              <input aria-label="Search content" placeholder="Search requests and groups" value={moderationSearch} onChange={e=>setModerationSearch(e.target.value)}/>
+              <div className="final-toolbar"><input aria-label="Search content" placeholder="Search requests and groups" value={moderationSearch} onChange={e=>setModerationSearch(e.target.value)}/><select aria-label="Filter requests by status" value={requestStatusFilter} onChange={e=>setRequestStatusFilter(e.target.value)}><option value="">All request statuses</option>{statuses.map(status=><option key={status} value={status}>{status}</option>)}</select><button className="danger-button" type="button" disabled={!selectedRequestIds.length} onClick={async()=>{if(!window.confirm("Delete selected requests?"))return;try{await apiRequest("/api/admin/requests/bulk-delete",session,{method:"POST",body:JSON.stringify({ids:selectedRequestIds})});setSelectedRequestIds([]);await adminRefresh();setNotice("Selected requests deleted.");}catch(err){setError(err instanceof Error?err.message:"Bulk delete failed.");}}}>Delete selected requests</button><button className="danger-button" type="button" disabled={!selectedGroupIds.length} onClick={async()=>{if(!window.confirm("Delete selected groups?"))return;try{await apiRequest("/api/admin/groups/bulk-delete",session,{method:"POST",body:JSON.stringify({ids:selectedGroupIds})});setSelectedGroupIds([]);await adminRefresh();setNotice("Selected groups deleted.");}catch(err){setError(err instanceof Error?err.message:"Bulk delete failed.");}}}>Delete selected groups</button></div>
               <h3>Service requests</h3>
-              {filteredRequests.map(item=><div className="final-row" key={item.id}><div><strong>#{item.id} {item.title}</strong><small>{item.category} · {item.status}</small></div><button className="danger-button" type="button" onClick={()=>void moderateDelete("requests",item.id)}>Delete</button></div>)}
+              {filteredRequests.map(item=><div className="final-row" key={item.id}><label className="check-line"><input type="checkbox" checked={selectedRequestIds.includes(item.id)} onChange={e=>setSelectedRequestIds(ids=>e.target.checked?[...ids,item.id]:ids.filter(id=>id!==item.id))}/><span><strong>#{item.id} {item.title}</strong><small>{item.category} · {item.status}</small></span></label><button className="danger-button" type="button" onClick={()=>void moderateDelete("requests",item.id)}>Delete</button></div>)}
               <h3>Groups</h3>
-              {filteredGroups.map(group=><div className="final-row" key={group.id}><div><strong>{group.name}</strong><small>{group.description}</small></div><button className="danger-button" type="button" onClick={()=>void moderateDelete("groups",group.id)}>Delete</button></div>)}
+              {filteredGroups.map(group=><div className="final-row" key={group.id}><label className="check-line"><input type="checkbox" checked={selectedGroupIds.includes(group.id)} onChange={e=>setSelectedGroupIds(ids=>e.target.checked?[...ids,group.id]:ids.filter(id=>id!==group.id))}/><span><strong>{group.name}</strong><small>{group.description}</small></span></label><button className="danger-button" type="button" onClick={()=>void moderateDelete("groups",group.id)}>Delete</button></div>)}
             </div>
           )}
           {adminTab === "activity" && <div className="final-card"><h3>Audit activity</h3>{activity.map(item=><div className="final-row" key={item.id}><div><strong>{item.action}</strong><small>{item.entity_type} {item.entity_id || ""} · {item.actor_id || "System"}</small><small>{item.ip_address || "IP unavailable"} · {item.user_agent || "Browser unavailable"}</small><small>{new Date(item.created_at).toLocaleString()}</small></div></div>)}</div>}
-          {adminTab === "security" && <div className="final-card"><h3>Security events</h3>{securityEvents.map(item=><div className="final-row" key={item.id}><div><strong>{item.event_type}</strong><small>{item.email || "Unknown account"} · {item.ip_address || "IP unavailable"}</small><small>{item.user_agent || "Browser unavailable"} · {new Date(item.created_at).toLocaleString()}</small></div></div>)}</div>}
+          {adminTab === "security" && <div className="final-card"><h3>Security events</h3><div className="final-grid"><div><h4>Events by IP</h4>{Object.entries(securityByIp).map(([ip,count])=><div className="final-row" key={ip}><strong>{ip}</strong><span>{count}</span></div>)}</div><div><h4>Events by account</h4>{Object.entries(securityByEmail).map(([email,count])=><div className="final-row" key={email}><strong>{email}</strong><span>{count}</span></div>)}</div></div>{securityEvents.map(item=><div className="final-row" key={item.id}><div><strong>{item.event_type}</strong><small>{item.email || "Unknown account"} · {item.ip_address || "IP unavailable"}</small><small>{item.user_agent || "Browser unavailable"} · {new Date(item.created_at).toLocaleString()}</small></div></div>)}</div>}
         </>
       )}
     </section>

@@ -136,11 +136,14 @@ def list_group_requests(group_id: str, user: CurrentUser) -> list[dict[str, Any]
 
 def update_group_request(group_id: str, request_id: int, payload: dict[str, Any],
                          user: CurrentUser, request) -> dict[str, Any]:
-    group = require_group_permission(group_id, user, "can_edit_requests")
+    group = _group(group_id)
     existing = repo.get_group_request(group_id, request_id)
     if not existing:
         raise HTTPException(status_code=404, detail="Group request not found.")
     values = {key: value for key, value in payload.items() if value is not None}
+    edit_fields = set(values) - {"assigned_to"}
+    if edit_fields:
+        require_group_permission(group_id, user, "can_edit_requests")
     if "assigned_to" in values:
         require_group_permission(group_id, user, "can_assign_requests")
         assignee = values["assigned_to"]

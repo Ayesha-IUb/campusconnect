@@ -147,6 +147,9 @@ def login(email: str, password: str, request: Request) -> tuple[dict[str, Any], 
     session_id = saved.data[0]["id"] if saved.data else None
     if not session_id:
         raise HTTPException(status_code=502, detail="Could not create a secure session.")
+    # A successful login resets the rolling failed-attempt window for this email/IP.
+    execute_query(db.table("login_attempts").delete()
+        .eq("email", email).eq("ip_address", ip).eq("succeeded", False))
     execute_query(db.table("login_attempts").insert({
         "email": email, "ip_address": ip, "succeeded": True,
     }))

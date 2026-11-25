@@ -56,8 +56,13 @@ def user_detail(user_id: str) -> dict[str, Any]:
         "profile": profile.data[0],
         "requests": execute_query(db.table("service_requests").select("*")
             .eq("user_id", user_id).order("created_at", desc=True)).data or [],
-        "groups": execute_query(db.table("group_members").select("group_id,created_at")
-            .eq("user_id", user_id)).data or [],
+        "groups": {
+            "owned": execute_query(db.table("groups").select("id,name,description,created_at")
+                .eq("owner_id", user_id)).data or [],
+            "member_of": execute_query(db.table("group_members").select(
+                "group_id,created_at,can_create_requests,can_edit_requests,can_assign_requests"
+            ).eq("user_id", user_id)).data or [],
+        },
         "sessions": execute_query(db.table("app_sessions").select(
             "id,device_name,ip_address,created_at,last_seen_at,expires_at,revoked_at"
         ).eq("user_id", user_id).order("created_at", desc=True)).data or [],
