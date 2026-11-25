@@ -62,8 +62,8 @@ export default function App() {
         ? await authRequest("signup", { email, password, data: { full_name: fullName } })
         : await authRequest("token?grant_type=password", { email, password })
 
-      if (authMode === "signup" && !result.access_token) {
-        setNotice("Account created. Check your email to confirm it, then sign in.")
+      if (authMode === "signup") {
+        setNotice(result.message || "Account created. Sign in to continue.")
         setAuthMode("login")
         return
       }
