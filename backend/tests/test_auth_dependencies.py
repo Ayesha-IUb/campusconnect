@@ -6,7 +6,7 @@ from fastapi import HTTPException
 from starlette.requests import Request
 
 import dependencies
-import auth_service
+from services import auth_service
 
 
 def fake_request() -> Request:

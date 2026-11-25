@@ -289,14 +289,6 @@ export default function FinalWorkspace({ page, profile, session, onSignOut }: Fi
     } catch (err) { setError(err instanceof Error ? err.message : "Could not revoke user session."); }
   }
 
-  async function revokeUserSession(userId: string, sessionId: string) {
-    try {
-      await apiRequest(`/api/admin/users/${userId}/sessions/${sessionId}`, session, { method: "DELETE" });
-      await showUser(userId);
-      setNotice("User session revoked.");
-    } catch (err) { setError(err instanceof Error ? err.message : "Could not revoke user session."); }
-  }
-
   async function showUser(userId: string) {
     try { setUserDetail(await apiRequest(`/api/admin/users/${userId}`, session)); }
     catch (err) { setError(err instanceof Error ? err.message : "Could not load user details."); }
