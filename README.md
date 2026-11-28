@@ -46,12 +46,14 @@ CampusConnect helps university students submit service requests, lets staff proc
 ### Frontend
     frontend/src/
     ├── components/       Reusable UI: AuthForm, RequestForm, RequestList, Sidebar, ...
-    ├── services/api.ts   HTTP calls, token refresh retry and CSV download
+    ├── pages/            Requests, Profile, Groups and Admin page entry points
+    │   └── WorkspaceController.tsx
+    ├── services/api.ts   HTTP calls, refresh retry, logout and CSV download
     ├── types/            Shared TypeScript types
-    ├── App.tsx            Main application state and navigation
-    └── index.css          Application styles
+    ├── App.tsx           Authentication state, navigation and request workflows
+    └── index.css         Application styles
 
-The page/application coordinates state, components render interface pieces, and services/api.ts owns network calls.
+RequestsPage owns the service-request dashboard composition. ProfilePage, GroupsPage and AdminPage provide dedicated page entry points; their shared profile/group/admin workflows currently live in WorkspaceController.tsx. App.tsx coordinates authentication, navigation and service-request state, while services/api.ts owns HTTP communication.
 
 ### Backend
     backend/
