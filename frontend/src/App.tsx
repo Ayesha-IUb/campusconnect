@@ -3,6 +3,7 @@ import type { AppPage, Category, RequestStatus, Session, Profile, ServiceRequest
 import AuthForm from "./components/AuthForm"
 import PageHeader from "./components/PageHeader"
 import Sidebar from "./components/Sidebar"
+import type { RequestFormValues } from "./components/RequestForm"
 import ProfilePage from "./pages/ProfilePage"
 import GroupsPage from "./pages/GroupsPage"
 import AdminPage from "./pages/AdminPage"
