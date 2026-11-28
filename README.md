@@ -5,7 +5,7 @@ CSE309 · Autumn 2026 · React + TypeScript · FastAPI · Supabase · Vercel
 
 CampusConnect helps university students submit service requests, lets staff process them, and gives administrators tools to manage accounts and campus-service content. The final development branch adds session controls, shared groups, fine-grained group permissions, administration, audit records and security monitoring.
 
-> **Deployment note:** Final features are developed on `final-viva-2026`. Before merging/deploying this branch, apply `backend/migrations/002_final_features.sql` in the Supabase SQL Editor and configure the environment variables below. Production continues to run the currently deployed `main` branch until the final PR is merged and redeployed.
+> **Deployment note:** Final features are developed on `refactor/page-structure`. Before merging/deploying this branch, apply `backend/migrations/002_final_features.sql` in the Supabase SQL Editor and configure the environment variables below. Production continues to run the currently deployed `main` branch until the final PR is merged and redeployed.
 
 ## Features
 
@@ -46,12 +46,14 @@ CampusConnect helps university students submit service requests, lets staff proc
 ### Frontend
     frontend/src/
     ├── components/       Reusable UI: AuthForm, RequestForm, RequestList, Sidebar, ...
-    ├── services/api.ts   HTTP calls, token refresh retry and CSV download
+    ├── pages/            Requests, Profile, Groups and Admin page entry points
+    │   └── WorkspaceController.tsx
+    ├── services/api.ts   HTTP calls, refresh retry, logout and CSV download
     ├── types/            Shared TypeScript types
-    ├── App.tsx            Main application state and navigation
-    └── index.css          Application styles
+    ├── App.tsx           Authentication state, navigation and request workflows
+    └── index.css         Application styles
 
-The page/application coordinates state, components render interface pieces, and services/api.ts owns network calls.
+RequestsPage owns the service-request dashboard composition. ProfilePage, GroupsPage and AdminPage provide dedicated page entry points; their shared profile/group/admin workflows currently live in WorkspaceController.tsx. App.tsx coordinates authentication, navigation and service-request state, while services/api.ts owns HTTP communication.
 
 ### Backend
     backend/
