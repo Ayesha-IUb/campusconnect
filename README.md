@@ -55,19 +55,20 @@ The page/application coordinates state, components render interface pieces, and 
 
 ### Backend
     backend/
-    ├── routers/          HTTP endpoints (auth, users, requests, groups, admin)
-    ├── services/         Application rules, authorization and workflows
-    ├── repositories/     Supabase persistence for requests and groups
+    ├── app/
+    │   ├── activity/     Activity repository and service
+    │   ├── admin/        Admin router, schemas, service and repository
+    │   ├── auth/         Auth router, schemas, service and repository
+    │   ├── core/         Database, dependencies, models and shared types
+    │   ├── groups/       Group router, schemas, service and repository
+    │   ├── rbac/         Reusable role and permission policies
+    │   ├── requests/     Request router, schemas, service and repository
+    │   └── users/        User/profile router, schemas, service and repository
     ├── migrations/       SQL schema changes
-    ├── tests/            Automated RBAC policy tests
-    ├── database.py       Supabase client and safe query helper
-    ├── dependencies.py   JWT, active-session and ban verification
-    ├── rbac.py           Reusable role/permission policy
-    ├── models.py         Typed domain records
-    ├── schemas.py        Pydantic request-validation schemas
-    └── main.py           FastAPI app, CORS, security headers and router registration
+    ├── tests/            Automated authentication and RBAC tests
+    └── main.py           FastAPI app and feature-router registration
 
-Main data flow: **HTTP request → Router → Service → Repository → Supabase PostgreSQL**.
+Main data flow: **HTTP request → Feature Router → Feature Service → Feature Repository/Core Database → Supabase PostgreSQL**.
 
 ## Technology
 
