@@ -5,7 +5,7 @@ CSE309 · Autumn 2026 · React + TypeScript · FastAPI · Supabase · Vercel
 
 CampusConnect helps university students submit service requests, lets staff process them, and gives administrators tools to manage accounts and campus-service content. The final development branch adds session controls, shared groups, fine-grained group permissions, administration, audit records and security monitoring.
 
-> **Deployment note:** Final features are developed on `final-viva-2026`. Before merging/deploying this branch, apply `backend/migrations/002_final_features.sql` in the Supabase SQL Editor and configure the environment variables below. Production continues to run the currently deployed `main` branch until the final PR is merged and redeployed.
+> **Deployment note:** Final features are developed on `refactor/page-structure`. Before merging/deploying this branch, apply `backend/migrations/002_final_features.sql` in the Supabase SQL Editor and configure the environment variables below. Production continues to run the currently deployed `main` branch until the final PR is merged and redeployed.
 
 ## Features
 
