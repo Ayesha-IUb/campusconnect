@@ -5,11 +5,11 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from database import supabase
-from routers.admin import router as admin_router
-from routers.auth import router as auth_router
-from routers.groups import router as groups_router
-from routers.requests import router as requests_router
-from routers.users import router as users_router
+from app.admin.router import router as admin_router
+from app.auth.router import router as auth_router
+from app.groups.router import router as groups_router
+from app.requests.router import router as requests_router
+from app.users.router import router as users_router
 
 app = FastAPI(
     title="CampusConnect API",
