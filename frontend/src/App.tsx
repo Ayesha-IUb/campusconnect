@@ -59,7 +59,7 @@ export default function App() {
 
     try {
       const result = authMode === "signup"
-        ? await authRequest("signup", { email, password, data: { full_name: fullName } })
+        ? await authRequest("signup", { email, password, full_name: fullName })
         : await authRequest("token?grant_type=password", { email, password })
 
       if (authMode === "signup") {
