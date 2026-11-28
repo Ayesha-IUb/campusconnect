@@ -1,5 +1,5 @@
 import type { Profile, Session } from "../types";
-import FinalWorkspace from "../components/FinalWorkspace";
+import FinalWorkspace from "./WorkspaceController";
 
 interface ProfilePageProps {
   profile: Profile;
