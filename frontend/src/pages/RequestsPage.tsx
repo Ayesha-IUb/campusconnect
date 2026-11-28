@@ -1,4 +1,5 @@
-import type { Category, RequestStatus, Profile, ServiceRequest, Session } from "../types";
+import type { FormEvent } from "react";
+import type { Category, RequestStatus, Profile, ServiceRequest } from "../types";
 import type { RequestFormValues } from "../components/RequestForm";
 import RequestDetails from "../components/RequestDetails";
 import RequestForm from "../components/RequestForm";
@@ -22,7 +23,7 @@ interface RequestsPageProps {
   onDescriptionChange: (value: string) => void;
   onCategoryChange: (value: Category) => void;
   onStatusChange: (value: RequestStatus) => void;
-  onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onCancel: () => void;
   onSelect: (id: number) => void;
   onEdit: (request: ServiceRequest) => void;
