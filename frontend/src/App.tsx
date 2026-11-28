@@ -7,7 +7,9 @@ import RequestForm, { type RequestFormValues } from "./components/RequestForm"
 import RequestList from "./components/RequestList"
 import RequestStats from "./components/RequestStats"
 import Sidebar from "./components/Sidebar"
-import FinalWorkspace from "./components/FinalWorkspace"
+import ProfilePage from "./pages/ProfilePage"
+import GroupsPage from "./pages/GroupsPage"
+import AdminPage from "./pages/AdminPage"
 import { apiRequest, authRequest, logoutRequest } from "./services/api"
 
 const emptyForm: RequestFormValues = {
@@ -299,13 +301,12 @@ export default function App() {
               onDelete={() => void handleDelete()}
             />
           </>
+        ) : activePage === "profile" ? (
+          <ProfilePage profile={profile} session={session} onSignOut={signOut} />
+        ) : activePage === "groups" ? (
+          <GroupsPage profile={profile} session={session} onSignOut={signOut} />
         ) : (
-          <FinalWorkspace
-            page={activePage}
-            profile={profile}
-            session={session}
-            onSignOut={signOut}
-          />
+          <AdminPage profile={profile} session={session} onSignOut={signOut} />
         )}
         <footer className="page-footer">CampusConnect · University Service Request Management</footer>
       </main>
