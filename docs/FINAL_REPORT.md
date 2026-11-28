@@ -188,9 +188,11 @@ All admin endpoints require the reusable admin dependency. Protected routes requ
 | Vercel production deployment | READY | Production deployment from main commit \`92701f5\` |
 | Production API health | Passed | \`{"status":"ok","database_configured":true}\` |
 | Hosted final-feature schema | Present | Read-only Supabase table/column inspection |
-| Student live smoke test | Passed on preview | Authenticated Student workspace, Groups and Profile & Sessions loaded without page errors |
+| Student login and Dashboard | Passed (user-confirmed live test) | User confirmed successful login and Dashboard display |
+| Student request CRUD | Passed (user-confirmed live test) | User confirmed create, read, update and delete operations |
+| Session persistence and logout access control | Passed (user-confirmed live test) | User confirmed refresh persistence, logout and blocked protected-page access |
 | Live admin workflows | Not yet verified | Requires an Admin browser session |
-| Full live JWT refresh/revoke and role/group negative tests | Not yet verified | Unit tests are not a substitute for live acceptance tests |
+| Full live JWT refresh-token rotation/reuse and role/group negative tests | Not yet verified | Browser refresh persistence does not independently prove token rotation/reuse detection |
 | Genuine screenshots S1–S21 | Pending | Must be captured from the running app |
 | 5–8 minute demo video | Pending | Must be recorded from the running app |
 
